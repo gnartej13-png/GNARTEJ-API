@@ -1,55 +1,169 @@
-// Tu URL de Render bien configurada
-const URL_MI_API = "https://gnartejapi.onrender.com";
-
-const botonEnviar = document.getElementById('boton-enviar'); // Cambia el ID si el tuyo se llama diferente
-const inputMensaje = document.getElementById('input-mensaje');
-const contenedorChat = document.getElementById('contenedor-chat');
-
-// Función para enviar el mensaje al servidor de Render
-async function enviarMensajeAlChat() {
-    const texto = inputMensaje.value.trim();
-    if (!texto) return;
-
-    // 1. Pintar tu mensaje en la pantalla
-    agregarMensajeAlDiseño(texto, 'usuario');
-    inputMensaje.value = '';
-
-    try {
-        // 2. Llamada mágica a TU servidor de Render
-        const respuesta = await fetch(URL_MI_API + "/api/chat", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ mensaje: texto })
-        });
-
-        if (!respuesta.ok) {
-            throw new Error("Error en el servidor");
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GNARTEJ AI Chatbot - Conectado a API Propia</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; padding: 0; background-color: #131314; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #e3e3e3;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            padding: 20px;
+        }
+        
+        /* Contenedor principal del chat */
+        #contenedor-chat {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid #3c4043;
+            border-radius: 8px;
+            background-color: #1e1e1f;
+            margin-bottom: 20px;
         }
 
-        const data = await respuesta.json();
-        
-        // 3. Pintar la respuesta de tu IA en la pantalla
-        agregarMensajeAlDiseño(data.respuesta, 'bot');
+        /* Estilos de los bocadillos de mensajes */
+        .mensaje {
+            max-width: 75%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            line-height: 1.4;
+            word-break: break-word;
+        }
+        .usuario {
+            background-color: #007bff;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .bot {
+            background-color: #303134;
+            color: #e3e3e3;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .error {
+            background-color: #a94442;
+            color: white;
+            align-self: center;
+            font-size: 0.9em;
+        }
 
-    } catch (error) {
-        console.error("Hubo un corte de cables:", error);
-        agregarMensajeAlDiseño("Lo siento, no he podido conectar con el servidor.", 'error');
-    }
-}
+        /* Zona de entrada de texto */
+        .area-entrada {
+            display: flex;
+            gap: 10px;
+        }
+        #input-mensaje {
+            flex: 1;
+            padding: 14px;
+            background-color: #202124;
+            border: 1px solid #3c4043;
+            border-radius: 24px;
+            color: #e3e3e3;
+            font-size: 16px;
+            outline: none;
+        }
+        #input-mensaje:focus {
+            border-color: #8ab4f8;
+        }
+        #boton-enviar {
+            background-color: #8ab4f8;
+            color: #131314;
+            border: none;
+            padding: 0 24px;
+            border-radius: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #boton-enviar:hover {
+            background-color: #aecbfa;
+        }
+    </style>
+</head>
+<body>
 
-// Función auxiliar para ir pintando los bocadillos del chat
-function agregarMensajeAlDiseño(texto, emisor) {
-    const div = document.createElement('div');
-    div.classList.add('mensaje', emisor);
-    div.innerText = texto;
-    contenedorChat.appendChild(div);
-    contenedorChat.scrollTop = contenedorChat.scrollHeight; // Auto-scroll hacia abajo
-}
+    <div id="contenedor-chat">
+        <div class="mensaje bot">¡Hola! Tu servidor ya está activo con confeti. ¿En qué te puedo ayudar hoy?</div>
+    </div>
 
-// Escuchar el clic del botón y la tecla Enter
-botonEnviar.addEventListener('click', enviarMensajeAlChat);
-inputMensaje.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') enviarMensajeAlChat();
-});
+    <div class="area-entrada">
+        <input type="text" id="input-mensaje" placeholder="Escribe un mensaje aquí..." autocomplete="off">
+        <button id="boton-enviar">Enviar</button>
+    </div>
+
+    <script>
+        // Tu URL de Render oficial
+        const URL_MI_API = "https://gnartej-api.onrender.com";
+
+        const botonEnviar = document.getElementById('boton-enviar');
+        const inputMensaje = document.getElementById('input-mensaje');
+        const contenedorChat = document.getElementById('contenedor-chat');
+
+        // Función principal para enviar mensajes
+        async function enviarMensajeAlChat() {
+            const texto = inputMensaje.value.trim();
+            if (!texto) return;
+
+            // 1. Pintamos tu mensaje en la pantalla
+            agregarMensajeAlDiseño(texto, 'usuario');
+            inputMensaje.value = '';
+
+            try {
+                // 2. Petición sumando textos para evitar fallos de comillas
+                const respuesta = await fetch(URL_MI_API + "/api/chat", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ mensaje: texto })
+                });
+
+                if (!respuesta.ok) {
+                    throw new Error("Error en la respuesta del servidor");
+                }
+
+                const data = await respuesta.json();
+                
+                // 3. Pintamos la respuesta de tu API
+                if (data && data.respuesta) {
+                    agregarMensajeAlDiseño(data.respuesta, 'bot');
+                } else {
+                    agregarMensajeAlDiseño("El servidor respondió pero no traía texto.", 'bot');
+                }
+
+            } catch (error) {
+                console.error("Error detectado:", error);
+                agregarMensajeAlDiseño("No he podido conectar con tu servidor de Render. Revisa que siga en 'Live'.", 'error');
+            }
+        }
+
+        // Función para crear los bocadillos en el HTML
+        function agregarMensajeAlDiseño(texto, emisor) {
+            const div = document.createElement('div');
+            div.classList.add('mensaje', emisor);
+            div.innerText = texto;
+            contenedorChat.appendChild(div);
+            // Auto-scroll hacia abajo
+            contenedorChat.scrollTop = contenedorChat.scrollHeight;
+        }
+
+        // Escuchadores de eventos
+        botonEnviar.addEventListener('click', enviarMensajeAlChat);
+        inputMensaje.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                enviarMensajeAlChat();
+            }
+        });
+    </script>
+</body>
+</html>
