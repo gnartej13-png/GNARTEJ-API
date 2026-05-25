@@ -74,7 +74,7 @@
   <div class="chat-container" id="chatBox">
     <div class="mensaje ai">
       <div class="avatar-usuario"><img src="https://lh3.googleusercontent.com/ogw/AF2bZygO1JvD0I88fl288YphyIClscUgOce8Dech49mqqWReuaA=s32-c-mo" alt="Logo"></div>
-      <div class="texto-burbuja">¡Conexión cliente-servidor lista! Los memes y las webs se cargan en local, pero los mensajes de texto se procesan a través de tu propia API.</div>
+      <div class="texto-burbuja">¡Conexión cliente-servidor lista! Los memes y las webs se cargan en local, pero los mensajes de texto se procesan a través de tu propia API en Render.</div>
     </div>
   </div>
 
@@ -86,8 +86,8 @@
   <script>
     let modoActual = "codigo";
     
-    // Pon aquí la URL que te dé Render cuando subas tu server.js (De momento usa tu ordenador local)
-    const URL_MI_API = "http://localhost:3000"; 
+    // Tu dirección real de Render usando el nombre de tu API
+    const URL_MI_API = "https://gnartejapi.onrender.com"; 
 
     const sonidosLocales = [
       { id: "faaah-63455", etiquetas: ["faaah", "faah", "fah"] },
@@ -98,15 +98,27 @@
     // AUTO-DESPERTADOR AL ENTRAR A LA WEB
     window.addEventListener('DOMContentLoaded', () => {
         const pantalla = document.getElementById('pantallaCarga');
-        fetch(`${URL_MI_API}/api/ping`)
-            .then(res => {
-                if(res.ok) {
-                    pantalla.style.transition = "opacity 0.5s ease";
-                    pantalla.style.opacity = "0";
-                    setTimeout(() => pantalla.style.display = "none", 500);
-                }
-            })
-            .catch(() => console.log("Esperando a que la API encienda..."));
+        
+        // Hacemos que intente conectar repetidamente hasta que responda
+        function intentarDespertar() {
+            fetch(`${URL_MI_API}/api/ping`)
+                .then(res => {
+                    if(res.ok) {
+                        pantalla.style.transition = "opacity 0.5s ease";
+                        pantalla.style.opacity = "0";
+                        setTimeout(() => pantalla.style.display = "none", 500);
+                        console.log("¡API conectada con éxito!");
+                    } else {
+                        setTimeout(intentarDespertar, 2000); // Reintenta cada 2 segundos
+                    }
+                })
+                .catch(() => {
+                    console.log("La API sigue arrancando, reintentando...");
+                    setTimeout(intentarDespertar, 2000); // Reintenta si hay error de conexión
+                });
+        }
+        
+        intentarDespertar();
     });
 
     function autoCorrectorYNormalizador(texto) {
@@ -180,7 +192,7 @@
         chatBox.scrollTop = chatBox.scrollHeight;
       } 
       else {
-        // LLAMADA REAL A TU PROPIA API PARA MENSAJES DE TEXTO
+        // LLAMADA REAL A TU API EN RENDER
         fetch(`${URL_MI_API}/api/chat?mensaje=${encodeURIComponent(mensajeOriginal)}`)
           .then(res => res.json())
           .then(datos => {
@@ -188,7 +200,7 @@
               chatBox.scrollTop = chatBox.scrollHeight;
           })
           .catch(() => {
-              burbujaRespuesta.innerHTML = `<p>No se pudo conectar con tu API. ¿Está encendido el archivo server.js?</p>`;
+              burbujaRespuesta.innerHTML = `<p>No se pudo conectar con tu API. Asegúrate de que el servidor en Render terminó de cargar correctamente.</p>`;
               chatBox.scrollTop = chatBox.scrollHeight;
           });
       }
