@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GNARTEJ AI Chatbot - Conectado a API Propia</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; padding: 0; background-color: #131314; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #e3e3e3;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      padding: 20px;
+    }
+    .selector-modo {
+      position: fixed;
+      top: 15px;
+      right: 20px;
+      background-color: #2b2a33;
+      color: #8ab4f8;
+      border: 1px solid #3c4043;
+      padding: 8px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: bold;
+      z-index: 999;
+    }
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      margin-top: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .mensaje { display: flex; align-items: flex-start; gap: 12px; max-width: 85%; }
+    .usuario { align-self: flex-end; flex-direction: row-reverse; }
+    .ai { align-self: flex-start; }
+    .avatar-usuario { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; }
+    .usuario .avatar-usuario { background-color: #555; color: white; }
+    .avatar-usuario img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .texto-burbuja { padding: 12px 16px; border-radius: 18px; font-size: 15px; line-height: 1.5; width: 100%; }
+    .usuario .texto-burbuja { background-color: #2b2a33; color: #f4f4f4; width: auto; }
+    .ai .texto-burbuja { background-color: #1e1f20; color: #e3e3e3; border: 1px solid #3c4043; }
+
+    .contenedor-sonidos-horizontal { display: flex; gap: 12px; overflow-x: auto; padding: 10px 0; width: 100%; }
+    .contenedor-sonidos-horizontal iframe { flex-shrink: 0; border-radius: 12px; background: #18191a; }
+    
+    .visor-web-container { width: 100%; height: 400px; margin-top: 10px; border-radius: 12px; overflow: hidden; border: 1px solid #3c4043; background: #ffffff; }
+    .visor-web-container iframe { width: 100%; height: 100%; border: none; }
+    
+    .input-container { display: flex; background-color: #1e1f20; border-radius: 28px; padding: 8px 16px; align-items: center; margin-top: 15px; border: 1px solid #3c4043; position: relative; z-index: 1000; }
+    .input-container input { flex: 1; background: transparent; border: none; color: white; font-size: 16px; padding: 8px; outline: none; }
+    .input-container button { background: transparent; border: none; color: #8ab4f8; font-size: 16px; cursor: pointer; font-weight: bold; padding: 5px 10px; }
+    
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div id="pantallaCarga" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #131314; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;">
+    <h2 style="color: #8ab4f8; margin-bottom: 10px;">Despertando a tu API...</h2>
+    <p style="color: #aaa; font-size: 14px;">Esto puede tardar unos 30 segundos si estaba dormida en Render.</p>
+    <div style="border: 4px solid #3c4043; border-top: 4px solid #8ab4f8; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-top: 20px;"></div>
+  </div>
+
+  <button class="selector-modo" id="btnModo" onclick="cambiarModoManual()">🧠 Modo: Código</button>
+
+  <div class="chat-container" id="chatBox">
+    <div class="mensaje ai">
+      <div class="avatar-usuario"><img src="https://lh3.googleusercontent.com/ogw/AF2bZygO1JvD0I88fl288YphyIClscUgOce8Dech49mqqWReuaA=s32-c-mo" alt="Logo"></div>
+      <div class="texto-burbuja">¡Conexión cliente-servidor lista! Los memes y las webs se cargan en local, pero los mensajes de texto se procesan a través de tu propia API.</div>
+    </div>
+  </div>
+
+  <div class="input-container">
+    <input type="text" id="userInput" placeholder="Escribe un mensaje..." autocomplete="off" onkeydown="evaluarEnter(event)">
+    <button onclick="enviarMensaje()">Enviar</button>
+  </div>
+
+  <script>
+    let modoActual = "codigo";
+    
+    // Pon aquí la URL que te dé Render cuando subas tu server.js (De momento usa tu ordenador local)
+    const URL_MI_API = "http://localhost:3000"; 
+
+    const sonidosLocales = [
+      { id: "faaah-63455", etiquetas: ["faaah", "faah", "fah"] },
+      { id: "alarma-auronplay", etiquetas: ["alarma", "auron", "auronplay"] },
+      { id: "movie_1", etiquetas: ["bruh", "meme"] }
+    ];
+
+    // AUTO-DESPERTADOR AL ENTRAR A LA WEB
+    window.addEventListener('DOMContentLoaded', () => {
+        const pantalla = document.getElementById('pantallaCarga');
+        fetch(`${URL_MI_API}/api/ping`)
+            .then(res => {
+                if(res.ok) {
+                    pantalla.style.transition = "opacity 0.5s ease";
+                    pantalla.style.opacity = "0";
+                    setTimeout(() => pantalla.style.display = "none", 500);
+                }
+            })
+            .catch(() => console.log("Esperando a que la API encienda..."));
+    });
+
+    function autoCorrectorYNormalizador(texto) {
+      let corregido = texto.toLowerCase();
+      corregido = corregido.replace(/\b(qeu|ue|qe|q)\b/g, "que").replace(/\b(ola)\b/g, "hola");
+      return corregido.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    }
+
+    function cambiarModoManual() {
+      const btn = document.getElementById("btnModo");
+      modoActual = (modoActual === "codigo") ? "internet" : "codigo";
+      btn.innerText = modoActual === "internet" ? "🌐 Modo: Internet" : "🧠 Modo: Código";
+    }
+
+    function mostrarPaginaWeb(busqueda) {
+      let webObjetivo = busqueda.replace(/(muestrame|pon|la|pagina|web|de|abre|sitio)/gi, "").trim().replace(/\s+/g, "");
+      if (!webObjetivo) webObjetivo = "myinstants";
+      let urlFinal = `https://www.${webObjetivo}.com`;
+      if (webObjetivo.includes("wikipedia")) urlFinal = "https://es.m.wikipedia.org";
+      if (webObjetivo.includes("myinstants")) urlFinal = "https://www.myinstants.com";
+
+      return `<p>Aquí tienes la web de <b>${webObjetivo}</b>:</p><div class="visor-web-container"><iframe src="${urlFinal}"></iframe></div>`;
+    }
+
+    function obtenerSonidosLocales(busqueda) {
+      let HTMLResultado = `<p>Tus botones guardados:</p><div class="contenedor-sonidos-horizontal">`;
+      let filtrados = sonidosLocales.filter(sonido => sonido.etiquetas.some(e => busqueda.includes(e)));
+      if (filtrados.length === 0 || busqueda.includes("sonidos")) {
+        filtrados = [sonidosLocales[0], sonidosLocales[1], sonidosLocales[2]];
+      }
+      filtrados.forEach(sonido => {
+        HTMLResultado += `<iframe width="110" height="200" src="https://www.myinstants.com/instant/${sonido.id}/embed/" frameborder="0" scrolling="no"></iframe>`;
+      });
+      HTMLResultado += `</div>`;
+      return HTMLResultado;
+    }
+
+    function enviarMensaje() {
+      const input = document.getElementById('userInput');
+      const chatBox = document.getElementById('chatBox');
+      if (!input || !chatBox) return;
+      
+      let mensajeOriginal = input.value.trim();
+      if (!mensajeOriginal) return;
+
+      const usuarioDiv = document.createElement('div');
+      usuarioDiv.className = 'mensaje usuario';
+      usuarioDiv.innerHTML = `<div class="avatar-usuario">U</div><div class="texto-burbuja">${mensajeOriginal}</div>`;
+      chatBox.appendChild(usuarioDiv);
+      
+      input.value = '';
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      let fraseProcesada = autoCorrectorYNormalizador(mensajeOriginal);
+
+      const aiDiv = document.createElement('div');
+      aiDiv.className = 'mensaje ai';
+      const idUnico = "resp-" + Date.now();
+      aiDiv.innerHTML = `<div class="avatar-usuario"><img src="https://lh3.googleusercontent.com/ogw/AF2bZygO1JvD0I88fl288YphyIClscUgOce8Dech49mqqWReuaA=s32-c-mo" alt="Logo"></div><div class="texto-burbuja" id="${idUnico}">Procesando...</div>`;
+      chatBox.appendChild(aiDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      const burbujaRespuesta = document.getElementById(idUnico);
+
+      if (fraseProcesada.includes("pagina") || fraseProcesada.includes("web")) {
+        burbujaRespuesta.innerHTML = mostrarPaginaWeb(fraseProcesada);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      } 
+      else if (fraseProcesada.includes("sonido") || fraseProcesada.includes("alarma") || fraseProcesada.includes("faaah")) {
+        burbujaRespuesta.innerHTML = obtenerSonidosLocales(fraseProcesada);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      } 
+      else {
+        // LLAMADA REAL A TU PROPIA API PARA MENSAJES DE TEXTO
+        fetch(`${URL_MI_API}/api/chat?mensaje=${encodeURIComponent(mensajeOriginal)}`)
+          .then(res => res.json())
+          .then(datos => {
+              burbujaRespuesta.innerHTML = `<p>${datos.respuesta}</p>`;
+              chatBox.scrollTop = chatBox.scrollHeight;
+          })
+          .catch(() => {
+              burbujaRespuesta.innerHTML = `<p>No se pudo conectar con tu API. ¿Está encendido el archivo server.js?</p>`;
+              chatBox.scrollTop = chatBox.scrollHeight;
+          });
+      }
+    }
+
+    function evaluarEnter(e) { if (e.key === 'Enter') { e.preventDefault(); enviarMensaje(); } }
+  </script>
+</body>
+</html>
