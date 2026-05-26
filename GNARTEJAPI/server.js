@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Aquí conectamos con la clave de Gemini que pondrás en Render
+// Se conecta usando la clave que pusiste en el panel de Render
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 app.post('/api/chat', async (req, res) => {
@@ -17,18 +17,18 @@ app.post('/api/chat', async (req, res) => {
             return res.status(400).json({ respuesta: "No has enviado ningún mensaje." });
         }
 
-        // Llamada directa al modelo Gemini 2.5 Flash
+        // Llamada oficial a Gemini 2.5 Flash
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: mensaje,
         });
 
-        // Enviamos la respuesta limpia de vuelta a tu Google Sites
+        // Devuelve la respuesta limpia de la IA
         res.json({ respuesta: response.text });
 
     } catch (error) {
-        console.error("Error al conectar con Gemini:", error);
-        res.status(500).json({ respuesta: "Vaya, ha habido un problema interno al procesar el mensaje con Gemini." });
+        console.error("Error con Gemini:", error);
+        res.status(500).json({ respuesta: "Error al procesar el mensaje con Gemini." });
     }
 });
 
