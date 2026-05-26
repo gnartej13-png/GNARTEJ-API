@@ -1,38 +1,38 @@
 const express = require('express');
 const cors = require('cors');
+const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
+app.use(cors());
+app.use(express.json());
 
-// CONFIGURACIÓN DE SEGURIDAD Y TRADUCTOR DE DATOS
-app.use(cors()); // Permite que tu index.html se comunique con Render
-app.use(express.json()); // Traduce los mensajes entrantes para que el servidor los entienda
+// Aquí conectamos con la clave de Gemini que pondrás en Render
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// RUTA PRINCIPAL DE PRUEBA (Para ver si la API está viva)
-app.get('/', (req, res) => {
-    res.send('¡El servidor de GNARTEJ-API está funcionando perfectamente en Render! 🚀');
-});
+app.post('/api/chat', async (req, res) => {
+    try {
+        const { mensaje } = req.body;
 
-// RUTA DEL CHAT (Aquí es donde llega el mensaje de tu web)
-app.post('/api/chat', (req, res) => {
-    // Recogemos el texto usando exactamente ".mensaje"
-    const mensajeUsuario = req.body.mensaje;
+        if (!mensaje) {
+            return res.status(400).json({ respuesta: "No has enviado ningún mensaje." });
+        }
 
-    // Si por alguna razón el mensaje llega vacío, evitamos que rompa
-    if (!mensajeUsuario) {
-        return res.json({ 
-            respuesta: "[API Propia]: Hola, parece que tu mensaje ha llegado vacío." 
+        // Llamada directa al modelo Gemini 2.5 Flash
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: mensaje,
         });
-    }
 
-    // RESPUESTA DEL SERVIDOR
-    // Aquí es donde tu API le contesta de vuelta a la web:
-    res.json({ 
-        respuesta: "[API Propia]: He recibido tu mensaje: \"" + mensajeUsuario + "\". ¡Estoy lista!" 
-    });
+        // Enviamos la respuesta limpia de vuelta a tu Google Sites
+        res.json({ respuesta: response.text });
+
+    } catch (error) {
+        console.error("Error al conectar con Gemini:", error);
+        res.status(500).json({ respuesta: "Vaya, ha habido un problema interno al procesar el mensaje con Gemini." });
+    }
 });
 
-// PUERTO AUTOMÁTICO PARA RENDER
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log("Servidor corriendo en el puerto " + PORT);
+    console.log(`Servidor de GNARTEJ corriendo en el puerto ${PORT}`);
 });
