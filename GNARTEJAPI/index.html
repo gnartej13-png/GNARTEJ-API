@@ -3,167 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GNARTEJ AI Chatbot - Conectado a API Propia</title>
+    <title>GNARTEJ AI</title>
     <style>
-        * { box-sizing: border-box; }
-        html, body { height: 100%; margin: 0; padding: 0; background-color: #131314; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #e3e3e3;
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
             display: flex;
             flex-direction: column;
+            align-items: center;
+            justify-content: center;
             height: 100vh;
+            margin: 0;
+        }
+        #chat-container {
+            width: 90%;
+            max-width: 500px;
+            background: #1e1e1e;
             padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
         }
-        
-        /* Contenedor principal del chat */
-        #contenedor-chat {
-            flex: 1;
+        #chat-box {
+            height: 300px;
             overflow-y: auto;
+            border: 1px solid #333;
             padding: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            border: 1px solid #3c4043;
-            border-radius: 8px;
-            background-color: #1e1e1f;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
+            background: #151515;
+            border-radius: 5px;
         }
-
-        /* Estilos de los bocadillos de mensajes */
-        .mensaje {
-            max-width: 75%;
-            padding: 12px 16px;
-            border-radius: 18px;
-            line-height: 1.4;
-            word-break: break-word;
+        .message {
+            margin: 5px 0;
+            padding: 8px;
+            border-radius: 5px;
         }
-        .usuario {
+        .user-message {
             background-color: #007bff;
-            color: white;
-            align-self: flex-end;
-            border-bottom-right-radius: 4px;
+            text-align: right;
+            margin-left: 20%;
         }
-        .bot {
-            background-color: #303134;
-            color: #e3e3e3;
-            align-self: flex-start;
-            border-bottom-left-radius: 4px;
+        .bot-message {
+            background-color: #28a745;
+            text-align: left;
+            margin-right: 20%;
         }
-        .error {
-            background-color: #a94442;
-            color: white;
-            align-self: center;
-            font-size: 0.9em;
+        .loading-message {
+            background-color: #555555;
+            text-align: left;
+            font-style: italic;
         }
-
-        /* Zona de entrada de texto */
-        .area-entrada {
+        #input-container {
             display: flex;
-            gap: 10px;
         }
-        #input-mensaje {
+        input {
             flex: 1;
-            padding: 14px;
-            background-color: #202124;
-            border: 1px solid #3c4043;
-            border-radius: 24px;
-            color: #e3e3e3;
-            font-size: 16px;
-            outline: none;
-        }
-        #input-mensaje:focus {
-            border-color: #8ab4f8;
-        }
-        #boton-enviar {
-            background-color: #8ab4f8;
-            color: #131314;
+            padding: 10px;
             border: none;
-            padding: 0 24px;
-            border-radius: 24px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 16px;
+            border-radius: 5px 0 0 5px;
+            background: #2a2a2a;
+            color: white;
         }
-        #boton-enviar:hover {
-            background-color: #aecbfa;
+        button {
+            padding: 10px;
+            border: none;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            border-radius: 0 5px 5px 0;
+        }
+        button:hover {
+            background: #0056b3;
         }
     </style>
 </head>
 <body>
 
-    <div id="contenedor-chat">
-        <div class="mensaje bot">¡Hola! Tu servidor ya está activo con confeti. ¿En qué te puedo ayudar hoy?</div>
-    </div>
-
-    <div class="area-entrada">
-        <input type="text" id="input-mensaje" placeholder="Escribe un mensaje aquí..." autocomplete="off">
-        <button id="boton-enviar">Enviar</button>
+    <h2>GNARTEJ AI</h2>
+    <div id="chat-container">
+        <div id="chat-box"></div>
+        <div id="input-container">
+            <input type="text" id="user-input" placeholder="Escribe un mensaje..." onkeypress="handleKeyPress(event)">
+            <button onclick="enviarMensaje()">Enviar</button>
+        </div>
     </div>
 
     <script>
-        // Tu URL de Render oficial
-        const URL_MI_API = "https://gnartej-api.onrender.com";
+        function handleKeyPress(event) {
+            if (event.key === "Enter") {
+                enviarMensaje();
+            }
+        }
 
-        const botonEnviar = document.getElementById('boton-enviar');
-        const inputMensaje = document.getElementById('input-mensaje');
-        const contenedorChat = document.getElementById('contenedor-chat');
+        async function enviarMensaje() {
+            const inputField = document.getElementById("user-input");
+            const chatBox = document.getElementById("chat-box");
+            const mensajeTexto = inputField.value.trim();
 
-        // Función principal para enviar mensajes
-        async function enviarMensajeAlChat() {
-            const texto = inputMensaje.value.trim();
-            if (!texto) return;
+            if (mensajeTexto === "") return;
 
-            // 1. Pintamos tu mensaje en la pantalla
-            agregarMensajeAlDiseño(texto, 'usuario');
-            inputMensaje.value = '';
+            // 1. Pintar el mensaje del usuario en la pantalla
+            chatBox.innerHTML += `<div class="message user-message">${mensajeTexto}</div>`;
+            inputField.value = "";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            // 2. Pintar bocadillo temporal de "Cargando..."
+            const loadingId = "loading-" + Date.now();
+            chatBox.innerHTML += `<div class="message loading-message" id="${loadingId}">Despertando a tu API... Esto puede tardar unos 30 segundos si estaba dormida en Render.</div>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
 
             try {
-                // 2. Petición sumando textos para evitar fallos de comillas
-                const respuesta = await fetch(URL_MI_API + "/api/chat", {
-                    method: "POST",
+                // 3. LLAMADA CORREGIDA A TU PROPIO SERVIDOR EN RENDER
+                const respuestaServidor = await fetch('https://gnartej-api.onrender.com/api/chat', {
+                    method: 'POST',
                     headers: {
-                        "Content-Type": "application/json"
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ mensaje: texto })
+                    body: JSON.stringify({ mensaje: mensajeTexto })
                 });
 
-                if (!respuesta.ok) {
-                    throw new Error("Error en la respuesta del servidor");
-                }
+                const datos = await respuestaServidor.json();
 
-                const data = await respuesta.json();
-                
-                // 3. Pintamos la respuesta de tu API
-                if (data && data.respuesta) {
-                    agregarMensajeAlDiseño(data.respuesta, 'bot');
-                } else {
-                    agregarMensajeAlDiseño("El servidor respondió pero no traía texto.", 'bot');
-                }
+                // Quitar el mensaje de carga
+                document.getElementById(loadingId).remove();
+
+                // 4. Pintar la respuesta real que viene de tu server.js
+                chatBox.innerHTML += `<div class="message bot-message">${datos.respuesta}</div>`;
 
             } catch (error) {
-                console.error("Error detectado:", error);
-                agregarMensajeAlDiseño("No he podido conectar con tu servidor de Render. Revisa que siga en 'Live'.", 'error');
+                console.error("Error al conectar:", error);
+                document.getElementById(loadingId).remove();
+                chatBox.innerHTML += `<div class="message bot-message" style="background-color: #dc3545;">Error: No se ha podido conectar con el servidor de Render.</div>`;
             }
-        }
 
-        // Función para crear los bocadillos en el HTML
-        function agregarMensajeAlDiseño(texto, emisor) {
-            const div = document.createElement('div');
-            div.classList.add('mensaje', emisor);
-            div.innerText = texto;
-            contenedorChat.appendChild(div);
-            // Auto-scroll hacia abajo
-            contenedorChat.scrollTop = contenedorChat.scrollHeight;
+            chatBox.scrollTop = chatBox.scrollHeight;
         }
-
-        // Escuchadores de eventos
-        botonEnviar.addEventListener('click', enviarMensajeAlChat);
-        inputMensaje.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                enviarMensajeAlChat();
-            }
-        });
     </script>
+
 </body>
 </html>
