@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Iniciamos la IA de Google
+// Aquí conectamos con tu clave secreta de Render
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 app.post('/chat', async (req, res) => {
@@ -17,27 +17,27 @@ app.post('/chat', async (req, res) => {
             return res.status(400).json({ reply: "No has enviado ningún mensaje." });
         }
 
-        // Llamada oficial actualizada a Gemini
+        // Llamada oficial con el formato correcto actual
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: message,
         });
 
-        // Aseguramos que extraemos bien el texto de la respuesta
+        // Verificamos que Google nos devuelva texto de verdad
         if (response && response.text) {
             res.json({ reply: response.text });
         } else {
-            console.error("Gemini no devolvió texto:", response);
-            res.json({ reply: "Lo siento, la IA recibió el mensaje pero no generó texto." });
+            console.error("Google no ha devuelto texto:", response);
+            res.json({ reply: "La IA ha recibido el mensaje pero no ha generado texto." });
         }
 
     } catch (error) {
-        console.error("Error completo en la petición de Gemini:", error);
-        res.status(500).json({ reply: "Error interno al conectar con Google Gemini." });
+        console.error("Error al conectar con Gemini:", error);
+        res.status(500).json({ reply: "Error interno al procesar el mensaje con Gemini." });
     }
 });
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-    console.log(`Servidor activo en el puerto ${PORT}`);
+    console.log(`Servidor funcionando en el puerto ${PORT}`);
 });
