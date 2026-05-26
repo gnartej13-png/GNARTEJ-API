@@ -10,7 +10,7 @@ app.post('/chat', async (req, res) => {
         const { message } = req.body;
         if (!message) return res.status(400).json({ reply: "No hay mensaje." });
 
-        // Llamada directa a Mistral AI (Modelo europeo potente)
+        // Llamada directa a Mistral usando la variable que has añadido
         const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -28,7 +28,7 @@ app.post('/chat', async (req, res) => {
         if (data.choices && data.choices[0].message) {
             res.json({ reply: data.choices[0].message.content });
         } else {
-            res.json({ reply: "La IA no ha devuelto una respuesta clara." });
+            res.json({ reply: "La IA de Mistral no ha devuelto texto." });
         }
 
     } catch (error) {
