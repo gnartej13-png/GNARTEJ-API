@@ -5,13 +5,29 @@ const cors = require('cors');
 const app = express();
 
 // =========================================================
-// 1. DEFINICIÓN DEL MODELO USER
+// 1. DEFINICIÓN DE MODELOS (USUARIOS Y GUARDADO DE CHATS)
 // =========================================================
+// Modelo de Usuarios
 const UserSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
     createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', UserSchema, 'gnartej'); 
+
+// Modelo de Mensajes individuales
+const MessageSchema = new mongoose.Schema({
+    sender: { type: String, required: true }, // "user" o "model"
+    text: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now }
+});
+
+// Modelo de Chats en la Base de Datos (Para no perder el historial)
+const ChatSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    messages: [MessageSchema],
+    createdAt: { type: Date, default: Date.now }
+});
+const Chat = mongoose.model('Chat', ChatSchema, 'chats_gnartej');
 
 // =========================================================
 // 2. CONFIGURACIÓN DE SEGURIDAD (CORS) Y MIDDLEWARES
@@ -24,7 +40,7 @@ app.use(cors({
 app.use(express.json());
 
 // =========================================================
-// 3. CONEXIÓN A MONGODB ATLAS
+// 3. CONEXIÓN A TU BASE DE DATOS MONGODB ATLAS
 // =========================================================
 const MONGO_URI = process.env.MONGO_URI;
 mongoose.connect(MONGO_URI, {
@@ -35,7 +51,7 @@ mongoose.connect(MONGO_URI, {
 .catch((err) => console.error("❌ Error al conectar a MongoDB:", err));
 
 // =========================================================
-// 4. RUTA DE LOGIN / REGISTRO
+// 4. RUTA DE LOGIN / REGISTRO DE USUARIOS
 // =========================================================
 app.post('/api/auth/login', async (req, res) => {
     try {
@@ -57,26 +73,59 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // =========================================================
-// 5. RUTAS DE CHATS Y ENLACE CON MISTRAL AI
+// 5. GESTIÓN REAL DE CHATS Y CONEXIÓN CON MISTRAL AI
 // =========================================================
 
-app.post('/api/chats/nuevo', (req, res) => {
-    return res.json({ _id: "chat_simulado", messages: [] });
+// Crear un nuevo chat de verdad en la base de datos para el usuario
+app.post('/api/chats/nuevo', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        if (!userId) return res.status(400).json({ error: "El userId es obligatorio" });
+
+        const nuevoChat = new Chat({ userId, messages: [] });
+        await nuevoChat.save();
+        
+        console.log(`✨ Nuevo chat creado en MongoDB para el usuario: ${userId}`);
+        return res.json(nuevoChat);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
 });
 
-app.get('/api/chats/:chatId', (req, res) => {
-    return res.json({ _id: req.params.chatId, messages: [] });
+// Cargar el historial real desde MongoDB cuando el usuario entra
+app.get('/api/chats/:chatId', async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        if (chatId === "nuevo" || chatId === "null") return res.status(400).json({ error: "ID de chat no válido" });
+
+        const chat = await Chat.findById(chatId);
+        if (!chat) return res.status(404).json({ error: "Chat no encontrado" });
+
+        return res.json(chat);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
 });
 
+// Enviar mensaje, guardarlo en Mongo, hablar con Mistral y guardar la respuesta
 app.post('/api/chat/:chatId', async (req, res) => {
     try {
+        const { chatId } = req.params;
         const { message } = req.body;
         const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 
         if (!message) return res.status(400).json({ error: "El mensaje está vacío" });
 
-        console.log(`🤖 Enviando a Mistral AI...`);
+        // 1. Buscar el chat del usuario en MongoDB
+        const chat = await Chat.findById(chatId);
+        if (!chat) return res.status(404).json({ error: "No se encontró el chat en la base de datos." });
 
+        // 2. Guardar el mensaje que ha escrito Gonzalo
+        chat.messages.push({ sender: 'user', text: message });
+
+        console.log(`🤖 Enviando conversación a Mistral AI...`);
+
+        // 3. Llamada a la API de Mistral
         const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -85,7 +134,7 @@ app.post('/api/chat/:chatId', async (req, res) => {
             },
             body: JSON.stringify({
                 model: "mistral-small-latest",
-                messages: [{ role: "user", content: message }]
+                messages: [{ role: "user", content: message }] // Aquí puedes mapear el historial completo si quieres
             })
         });
 
@@ -97,22 +146,24 @@ app.post('/api/chat/:chatId', async (req, res) => {
         }
 
         const replyText = data.choices[0].message.content;
-        console.log(`✨ Mistral respondió: "${replyText.substring(0, 20)}..."`);
+        console.log(`✨ Mistral respondió con éxito.`);
 
-        // SOLUCIÓN AL MENSAJE VACÍO:
-        // Enviamos la respuesta repetida con todos los nombres posibles que pueda buscar tu Google Sites
+        // 4. Guardar la respuesta de la IA en MongoDB junto al usuario
+        chat.messages.push({ sender: 'model', text: replyText });
+        await chat.save();
+
+        // 5. Devolver al Google Sites en todos los formatos para asegurar compatibilidad total
         return res.json({ 
             response: replyText,
             reply: replyText,
             text: replyText,
             message: replyText,
-            content: replyText,
-            resultado: replyText
+            content: replyText
         });
 
     } catch (error) {
         console.error("Error crítico:", error);
-        return res.status(500).json({ error: "Error interno" });
+        return res.status(500).json({ error: "Error interno del servidor" });
     }
 });
 
