@@ -36,7 +36,8 @@ app.use(express.json());
 // 3. CONEXIÓN A TU BASE DE DATOS MONGODB ATLAS
 // =========================================================
 // CAMBIA SOLO EL TEXTO 'TU_CONTRASEÑA_REAL' POR TU CLAVE DE ATLAS (SIN < >)
-const MONGO_URI = "mongodb+srv://gnartej:gnartej@cluster0.qhlmiq7.mongodb.net/DATAGNARTEJAI?appName=Cluster0";
+// Ahora el código es 100% seguro. No hay contraseñas escritas aquí.
+const MONGO_URI = process.env.MONGO_URI;
 
 mongoose.connect(MONGO_URI, {
     useNewUrlParser: true,
