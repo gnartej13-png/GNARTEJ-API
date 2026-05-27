@@ -1,31 +1,12 @@
-// Ruta de Login / Registro automático
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { username } = req.body;
-        if (!username) {
-            return res.status(400).json({ error: "El nombre de usuario es obligatorio" });
-        }
+const express = require('express');
+const cors = require('cors'); // <-- Asegúrate de tener esta línea
+const app = express();
 
-        // 1. Buscar si el usuario ya existe en MongoDB
-        let user = await User.findOne({ name: username });
+// Configurar CORS para permitir que Google Sites se conecte
+app.use(cors({
+    origin: '*', // Permite peticiones desde cualquier sitio (ideal para Google Sites)
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
-        // 2. Si no existe, lo creamos e insertamos en la base de datos
-        if (!user) {
-            user = new User({
-                name: username,
-                createdAt: new Date()
-            });
-            await user.save();
-            console.log(`🎉 Cuenta nueva creada: ${username}`);
-        } else {
-            console.log(`🔑 Sesión iniciada para: ${username}`);
-        }
-
-        // 3. Devolvemos el usuario (con su _id de MongoDB) al frontend
-        res.json(user);
-
-    } catch (error) {
-        console.error("Error en la autenticación:", error);
-        res.status(500).json({ error: "Error interno del servidor al crear la cuenta" });
-    }
-});
+app.use(express.json());
