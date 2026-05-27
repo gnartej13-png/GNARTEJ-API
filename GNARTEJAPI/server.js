@@ -5,7 +5,7 @@ const cors = require('cors');
 const app = express();
 
 // =========================================================
-// 1. DEFINICIÓN DEL MODELO USER
+// 1. DEFINICIÓN DEL MODELO USER (¡Unificado aquí mismo!)
 // =========================================================
 const UserSchema = new mongoose.Schema({
     name: { 
@@ -19,13 +19,14 @@ const UserSchema = new mongoose.Schema({
     }
 });
 
+// Vinculamos el modelo directamente con tu colección 'gnartej'
 const User = mongoose.model('User', UserSchema, 'gnartej'); 
 
 // =========================================================
-// 2. CONFIGURACIÓN DE SEGURIDAD (CORS)
+// 2. CONFIGURACIÓN DE SEGURIDAD (CORS) para Google Sites
 // =========================================================
 app.use(cors({
-    origin: '*',
+    origin: '*', // Evita que Google Sites bloquee las peticiones por seguridad
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -35,9 +36,8 @@ app.use(express.json());
 // =========================================================
 // 3. CONEXIÓN A TU BASE DE DATOS MONGODB ATLAS
 // =========================================================
-// Pistas sobre la contraseña: Si tiene caracteres como @, $, #, cámbiala en la 
-// web de MongoDB Atlas por una que solo tenga letras y números para evitar el Error 500.
-const MONGO_URI = "mongodb+srv://tu_usuario:tu_contraseña@cluster0.xxxx.mongodb.net/DATAGNARTEJAI?retryWrites=true&w=majority";
+// He insertado tu URL real. Cambia 'TU_CONTRASEÑA_REAL' por tu clave de Atlas.
+const MONGO_URI = "mongodb+srv://gnartej:TU_CONTRASEÑA_REAL@cluster0.qhlmiq7.mongodb.net/DATAGNARTEJAI?appName=Cluster0";
 
 mongoose.connect(MONGO_URI, {
     useNewUrlParser: true,
@@ -62,10 +62,10 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(500).json({ error: "La base de datos de MongoDB no está lista o conectada." });
         }
 
-        // Buscamos si el usuario ya existe
+        // Buscamos si el usuario ya existe en la colección 'gnartej'
         let user = await User.findOne({ name: username });
 
-        // Si no existe, lo creamos
+        // Si no existe, el servidor lo crea de forma automática en MongoDB Atlas
         if (!user) {
             user = new User({
                 name: username,
@@ -81,7 +81,6 @@ app.post('/api/auth/login', async (req, res) => {
 
     } catch (error) {
         console.error("Error crítico en el proceso de login:", error);
-        // Si se rompe, le enviamos el detalle al navegador para saber por qué falló
         return res.status(500).json({ error: error.message });
     }
 });
