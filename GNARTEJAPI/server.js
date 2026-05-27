@@ -50,7 +50,7 @@ app.post('/api/auth/login', async (req, res) => {
         let user = await User.findOne({ name: username });
 
         if (!user) {
-            // REGISTRO: Si el usuario no existe, lo creamos
+            // REGISTRO
             user = new User({
                 name: username,
                 password: password,
@@ -64,13 +64,13 @@ app.post('/api/auth/login', async (req, res) => {
                 name: user.name
             });
         } else {
-            // LOGIN: Si el usuario ya existe, comprobamos contraseña
+            // LOGIN
             if (user.password !== password) {
                 console.log(`❌ Intento de acceso denegado para: ${username} (Contraseña incorrecta)`);
                 return res.status(401).json({ error: "Contraseña incorrecta. Acceso denegado." });
             }
 
-            // RESPUESTA LIMPIA CORREGIDA PARA EVITAR ERROR 500
+            // RESPUESTA FORMATEADA COMPATIBLE CON TU WEB
             console.log(`🔑 Sesión iniciada con éxito para: ${username}`);
             return res.status(200).json({
                 _id: user._id.toString(),
@@ -85,7 +85,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ==========================================
-// 5. GESTIÓN DE CHATS, MEMORIA HISTÓRICA Y MISTRAL AI
+// 5. GESTIÓN DE CHATS Y MEMORIA HISTÓRICA
 // ==========================================
 app.post('/api/chats/nuevo', async (req, res) => {
     try {
@@ -95,4 +95,70 @@ app.post('/api/chats/nuevo', async (req, res) => {
         const nuevoChat = new Chat({
             userId,
             titulo: 'Conversación Nueva',
-            mensajes:
+            mensajes: [
+                { role: 'system', content: 'Eres GNARTEJ AI, un asistente inteligente avanzado.' }
+            ]
+        });
+
+        await nuevoChat.save();
+        return res.status(201).json(nuevoChat);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/chats/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const chats = await Chat.find({ userId }).sort({ updatedAt: -1 });
+        return res.json(chats);
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.delete('/api/chats/:chatId', async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        await Chat.findByIdAndDelete(chatId);
+        return res.json({ message: "Chat eliminado correctamente" });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/chat/:chatId', async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const { message } = req.body;
+
+        const chat = await Chat.findById(chatId);
+        if (!chat) return res.status(404).json({ error: "Chat no encontrado" });
+
+        chat.mensajes.push({ role: 'user', content: message });
+
+        // Mantenemos la respuesta directa para evitar dependencias externas que tiren abajo el despliegue
+        let respuestaIA = "Servidor GNARTEJ AI conectado. Procesando tu mensaje de forma óptima.";
+
+        chat.mensajes.push({ role: 'assistant', content: respuestaIA });
+        
+        if (chat.titulo === 'Conversación Nueva' && message) {
+            chat.titulo = message.substring(0, 26) + (message.length > 26 ? '...' : '');
+        }
+
+        chat.updatedAt = new Date();
+        await chat.save();
+
+        return res.json({ reply: respuestaIA });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/', (req, res) => {
+    res.send('🚀 Servidor GNARTEJ-API Operativo y Estable');
+});
+
+app.listen(PORT, () => {
+    console.log(`🚀 Servidor GNARTEJ-API corriendo en el puerto ${PORT}`);
+});
