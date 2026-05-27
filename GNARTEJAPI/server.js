@@ -5,7 +5,7 @@ const cors = require('cors');
 const app = express();
 
 // =========================================================
-// 1. DEFINICIÓN DEL MODELO USER (PARA TU MONGODB ATLAS)
+// 1. DEFINICIÓN DEL MODELO USER
 // =========================================================
 const UserSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
@@ -24,7 +24,7 @@ app.use(cors({
 app.use(express.json());
 
 // =========================================================
-// 3. CONEXIÓN A TU BASE DE DATOS MONGODB ATLAS
+// 3. CONEXIÓN A MONGODB ATLAS
 // =========================================================
 const MONGO_URI = process.env.MONGO_URI;
 mongoose.connect(MONGO_URI, {
@@ -35,7 +35,7 @@ mongoose.connect(MONGO_URI, {
 .catch((err) => console.error("❌ Error al conectar a MongoDB:", err));
 
 // =========================================================
-// 4. RUTA AUTOMÁTICA DE LOGIN / REGISTRO
+// 4. RUTA DE LOGIN / REGISTRO
 // =========================================================
 app.post('/api/auth/login', async (req, res) => {
     try {
@@ -60,7 +60,6 @@ app.post('/api/auth/login', async (req, res) => {
 // 5. RUTAS DE CHATS Y ENLACE CON MISTRAL AI
 // =========================================================
 
-// Rutas de soporte para que el diseño de Google Sites no tire error al cargar
 app.post('/api/chats/nuevo', (req, res) => {
     return res.json({ _id: "chat_simulado", messages: [] });
 });
@@ -69,18 +68,15 @@ app.get('/api/chats/:chatId', (req, res) => {
     return res.json({ _id: req.params.chatId, messages: [] });
 });
 
-// ESTA ES LA RUTA DE MISTRAL QUE USABAS ANTES
 app.post('/api/chat/:chatId', async (req, res) => {
     try {
         const { message } = req.body;
-        // Recuperamos la clave de Mistral que ya tenías guardada en Render
         const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 
         if (!message) return res.status(400).json({ error: "El mensaje está vacío" });
 
-        console.log(`🤖 Solicitando respuesta a Mistral AI...`);
+        console.log(`🤖 Enviando a Mistral AI...`);
 
-        // Conexión directa con la API oficial de Mistral
         const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -88,7 +84,7 @@ app.post('/api/chat/:chatId', async (req, res) => {
                 'Authorization': `Bearer ${MISTRAL_API_KEY}`
             },
             body: JSON.stringify({
-                model: "mistral-small-latest", // Tu modelo de confianza
+                model: "mistral-small-latest",
                 messages: [{ role: "user", content: message }]
             })
         });
@@ -96,19 +92,27 @@ app.post('/api/chat/:chatId', async (req, res) => {
         const data = await response.json();
 
         if (!response.ok) {
-            console.error("Fallo en la API de Mistral:", data);
-            return res.status(500).json({ response: "Error al hablar con Mistral AI." });
+            console.error("Fallo de Mistral:", data);
+            return res.status(500).json({ error: "Error en Mistral AI" });
         }
 
         const replyText = data.choices[0].message.content;
-        console.log(`✨ Mistral ha respondido con éxito.`);
+        console.log(`✨ Mistral respondió: "${replyText.substring(0, 20)}..."`);
 
-        // Devolvemos la respuesta limpia a tu Google Sites
-        return res.json({ response: replyText });
+        // SOLUCIÓN AL MENSAJE VACÍO:
+        // Enviamos la respuesta repetida con todos los nombres posibles que pueda buscar tu Google Sites
+        return res.json({ 
+            response: replyText,
+            reply: replyText,
+            text: replyText,
+            message: replyText,
+            content: replyText,
+            resultado: replyText
+        });
 
     } catch (error) {
-        console.error("Error en el proceso del chat:", error);
-        return res.status(500).json({ response: "Error interno del servidor." });
+        console.error("Error crítico:", error);
+        return res.status(500).json({ error: "Error interno" });
     }
 });
 
