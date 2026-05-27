@@ -7,21 +7,18 @@ const app = express();
 // =========================================================
 // 1. DEFINICIÓN DE MODELOS (USUARIOS Y GUARDADO DE CHATS)
 // =========================================================
-// Modelo de Usuarios
 const UserSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
     createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', UserSchema, 'gnartej'); 
 
-// Modelo de Mensajes individuales
 const MessageSchema = new mongoose.Schema({
     sender: { type: String, required: true }, // "user" o "model"
     text: { type: String, required: true },
     timestamp: { type: Date, default: Date.now }
 });
 
-// Modelo de Chats en la Base de Datos (Para no perder el historial)
 const ChatSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     messages: [MessageSchema],
@@ -73,10 +70,9 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // =========================================================
-// 5. GESTIÓN REAL DE CHATS Y CONEXIÓN CON MISTRAL AI
+// 5. GESTIÓN DE CHATS, MEMORIA HISTÓRICA Y MISTRAL AI
 // =========================================================
 
-// Crear un nuevo chat de verdad en la base de datos para el usuario
 app.post('/api/chats/nuevo', async (req, res) => {
     try {
         const { userId } = req.body;
@@ -84,15 +80,12 @@ app.post('/api/chats/nuevo', async (req, res) => {
 
         const nuevoChat = new Chat({ userId, messages: [] });
         await nuevoChat.save();
-        
-        console.log(`✨ Nuevo chat creado en MongoDB para el usuario: ${userId}`);
         return res.json(nuevoChat);
     } catch (error) {
         return res.status(500).json({ error: error.message });
     }
 });
 
-// Cargar el historial real desde MongoDB cuando el usuario entra
 app.get('/api/chats/:chatId', async (req, res) => {
     try {
         const { chatId } = req.params;
@@ -107,7 +100,7 @@ app.get('/api/chats/:chatId', async (req, res) => {
     }
 });
 
-// Enviar mensaje, guardarlo en Mongo, hablar con Mistral y guardar la respuesta
+// RUTA DEL CHAT CON MEMORIA E INSTRUCCIONES DE IDENTIDAD
 app.post('/api/chat/:chatId', async (req, res) => {
     try {
         const { chatId } = req.params;
@@ -116,16 +109,31 @@ app.post('/api/chat/:chatId', async (req, res) => {
 
         if (!message) return res.status(400).json({ error: "El mensaje está vacío" });
 
-        // 1. Buscar el chat del usuario en MongoDB
         const chat = await Chat.findById(chatId);
         if (!chat) return res.status(404).json({ error: "No se encontró el chat en la base de datos." });
 
-        // 2. Guardar el mensaje que ha escrito Gonzalo
+        // 1. Guardamos el nuevo mensaje del usuario en la base de datos
         chat.messages.push({ sender: 'user', text: message });
 
-        console.log(`🤖 Enviando conversación a Mistral AI...`);
+        // 2. CONFIGURAMOS LAS INSTRUCCIONES DE PERSONALIDAD (SYSTEM PROMPT)
+        const systemInstruction = {
+            role: "system",
+            content: "Tu creador y dueño se llama Gonzalo Naranjo Tejero, quien nació el 19 de septiembre de 2013. No debes decir bajo ningún concepto que los dueños o creadores de la IA son la empresa Mistral AI; tu dueño es Gonzalo Naranjo Tejero. No digas nada que no esté relacionado con Mistral en el caso de que el usuario no te lo pida de forma explícita. Sin embargo, si el usuario te pregunta directamente qué es Mistral, qué significa o cosas que se refieran a ello, entonces háblale y explícaselo con normalidad."
+        };
 
-        // 3. Llamada a la API de Mistral
+        // 3. CONSTRUIMOS LA MEMORIA (Mapeamos los últimos mensajes guardados para que recuerde el contexto)
+        // Tomamos los últimos 10 mensajes del historial para no saturar la API, manteniendo el orden correcto
+        const historialMensajes = chat.messages.slice(-10).map(msg => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.text
+        }));
+
+        // Juntamos las órdenes del sistema con el historial guardado
+        const apiMessages = [systemInstruction, ...historialMensajes];
+
+        console.log(`🤖 Enviando conversación con memoria a Mistral AI...`);
+
+        // 4. Llamada a la API de Mistral enviando todo el bloque de memoria
         const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -134,7 +142,7 @@ app.post('/api/chat/:chatId', async (req, res) => {
             },
             body: JSON.stringify({
                 model: "mistral-small-latest",
-                messages: [{ role: "user", content: message }] // Aquí puedes mapear el historial completo si quieres
+                messages: apiMessages
             })
         });
 
@@ -146,13 +154,13 @@ app.post('/api/chat/:chatId', async (req, res) => {
         }
 
         const replyText = data.choices[0].message.content;
-        console.log(`✨ Mistral respondió con éxito.`);
+        console.log(`✨ Mistral respondió teniendo en cuenta las reglas.`);
 
-        // 4. Guardar la respuesta de la IA en MongoDB junto al usuario
+        // 5. Guardamos la respuesta de la IA en MongoDB para que quede registrada en el historial
         chat.messages.push({ sender: 'model', text: replyText });
         await chat.save();
 
-        // 5. Devolver al Google Sites en todos los formatos para asegurar compatibilidad total
+        // 6. Devolvemos el texto al frontend en todos los formatos compatibles
         return res.json({ 
             response: replyText,
             reply: replyText,
