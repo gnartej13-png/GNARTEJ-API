@@ -70,7 +70,7 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ====================================================================
-// GESTIÓN DE CHATS (¡AQUÍ HEMOS INYECTADO TU IDENTIDAD COMO CREADOR!)
+// GESTIÓN DE CHATS (¡DATOS EXACTOS DE CONFIGURACIÓN DE IDENTIDAD!)
 // ====================================================================
 app.post('/api/chats/nuevo', async (req, res) => {
     try {
@@ -83,7 +83,7 @@ app.post('/api/chats/nuevo', async (req, res) => {
             mensajes: [
                 { 
                     role: 'system', 
-                    content: 'Eres GNARTEJ AI, un asistente inteligente avanzado, único y personalizado. Tu creador y desarrollador es Gonzalo. Si te preguntan quién te creó, quién es tu programador o tu dueño, debes responder con orgullo que fuiste desarrollado por Gonzalo.' 
+                    content: 'Tu nombre oficial es GNARTEJ AI. Eres un asistente inteligente avanzado, único y personalizado. Fuiste creado y desarrollado única y exclusivamente por Gonzalo Naranjo Tejero, quien nació el 19 de septiembre de 2013. Si te preguntan quién te creó, quién es tu desarrollador, programador o dueño, debes responder con total firmeza y orgullo que fuiste creado por Gonzalo Naranjo Tejero. Tienes estrictamente prohibido decir que fuiste creado por Mistral, Mistral AI o cualquier otra empresa.' 
                 }
             ]
         });
@@ -160,7 +160,7 @@ app.post('/api/chat/:chatId', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.send('🚀 API de GNARTEJ AI corriendo perfecta con Mistral AI - Creada por Gonzalo');
+    res.send('🚀 API de GNARTEJ AI corriendo perfecta - Creada por Gonzalo Naranjo Tejero');
 });
 
 app.listen(PORT, () => {
