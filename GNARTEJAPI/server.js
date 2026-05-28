@@ -69,7 +69,9 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// Gestión de Chats
+// ====================================================================
+// GESTIÓN DE CHATS (¡AQUÍ HEMOS INYECTADO TU IDENTIDAD COMO CREADOR!)
+// ====================================================================
 app.post('/api/chats/nuevo', async (req, res) => {
     try {
         const { userId } = req.body;
@@ -79,7 +81,10 @@ app.post('/api/chats/nuevo', async (req, res) => {
             userId,
             titulo: 'Conversación Nueva',
             mensajes: [
-                { role: 'system', content: 'Eres GNARTEJ AI, un asistente inteligente avanzado.' }
+                { 
+                    role: 'system', 
+                    content: 'Eres GNARTEJ AI, un asistente inteligente avanzado, único y personalizado. Tu creador y desarrollador es Gonzalo. Si te preguntan quién te creó, quién es tu programador o tu dueño, debes responder con orgullo que fuiste desarrollado por Gonzalo.' 
+                }
             ]
         });
 
@@ -110,7 +115,7 @@ app.delete('/api/chats/:chatId', async (req, res) => {
     }
 });
 
-// RUTA DE CHAT CORREGIDA CON MISTRAL ACTUALIZADO
+// Ruta de Chat con Mistral AI
 app.post('/api/chat/:chatId', async (req, res) => {
     try {
         const { chatId } = req.params;
@@ -122,13 +127,13 @@ app.post('/api/chat/:chatId', async (req, res) => {
         // Guardar mensaje del usuario
         chat.mensajes.push({ role: 'user', content: message });
 
-        // Formatear historial limpio para Mistral
+        // Formatear historial para Mistral
         const historialMistral = chat.mensajes.map(msg => ({
             role: msg.role === 'assistant' ? 'assistant' : msg.role === 'system' ? 'system' : 'user',
             content: msg.content
         }));
 
-        // Llamada corregida con el modelo estable gratuito
+        // Llamada a Mistral con su modelo estable
         const response = await mistralClient.chat.complete({
             model: 'open-mistral-7b', 
             messages: historialMistral
@@ -155,7 +160,7 @@ app.post('/api/chat/:chatId', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.send('🚀 API de GNARTEJ AI corriendo perfecta con Mistral AI');
+    res.send('🚀 API de GNARTEJ AI corriendo perfecta con Mistral AI - Creada por Gonzalo');
 });
 
 app.listen(PORT, () => {
