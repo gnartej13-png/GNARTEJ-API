@@ -1,18 +1,17 @@
 {
-  "name": "gnartej-ai-api",
+  "name": "gnartej-api",
   "version": "1.0.0",
-  "description": "Servidor backend para GNARTEJ AI con sistema de usuarios e historial en MongoDB",
+  "description": "Servidor backend para GNARTEJ AI",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "keywords": [],
   "author": "Gonzalo Naranjo Tejero",
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "google-auth-library": "^9.11.0",
     "mongoose": "^8.4.1"
   }
 }
