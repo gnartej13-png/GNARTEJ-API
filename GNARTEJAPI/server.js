@@ -211,12 +211,15 @@ app.post('/api/chat/:chatId', async (req, res) => {
         const chat = await Chat.findById(req.params.chatId);
         if (!chat) return res.status(404).json({ error: 'Chat no encontrado' });
 
+        console.log(`[Chat] Procesando mensaje para chatId=${req.params.chatId}`);
+
         // 1. Guardamos el mensaje del usuario en la base de datos
         chat.mensajes.push({ role: 'user', content: message });
 
         // 2. Llamamos a Mistral con un timeout para evitar que cuelgue el servidor
+        // Using mistral-small: responds directly without web search behaviour
         const mistralPromise = mistral.chat.complete({
-            model: 'mistral-tiny',
+            model: 'mistral-small',
             messages: chat.mensajes
         });
 
@@ -236,6 +239,7 @@ app.post('/api/chat/:chatId', async (req, res) => {
         }
 
         const respuestaIA = respuestaMistral.choices[0].message.content;
+        console.log(`[Mistral] Respuesta recibida (${respuestaIA.length} chars) para chatId=${req.params.chatId}`);
 
         // 3. Guardamos la respuesta de la IA en la base de datos
         chat.mensajes.push({ role: 'assistant', content: respuestaIA });
@@ -246,9 +250,21 @@ app.post('/api/chat/:chatId', async (req, res) => {
         }
 
         chat.fecha = Date.now();
-        await chat.save();
-        
-        // Enviamos la respuesta real al frontend
+
+        // 4. Persistimos la conversación en MongoDB antes de responder al cliente
+        try {
+            await chat.save();
+            console.log(`[MongoDB] Chat guardado con éxito: chatId=${req.params.chatId}, mensajes=${chat.mensajes.length}`);
+        } catch (saveError) {
+            console.error(`[MongoDB] FALLO al guardar el chat chatId=${req.params.chatId}:`, saveError.message);
+            console.error('[MongoDB] Detalle completo del error de guardado:', saveError);
+            return res.status(500).json({
+                error: 'La IA respondió pero no se pudo guardar la conversación en la base de datos.',
+                detalle: saveError.message
+            });
+        }
+
+        // 5. Enviamos la respuesta real al frontend sólo tras guardar con éxito
         res.json({ reply: respuestaIA });
 
     } catch (error) {
