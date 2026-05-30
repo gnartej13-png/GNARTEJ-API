@@ -1,34 +1,67 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const { Mistral } = require('@mistralai/mistralai'); // IMPORTANTE: Cargamos Mistral
+const { Mistral } = require('@mistralai/mistralai');
 require('dotenv').config();
 
 const app = express();
 
+// --- REQUEST TIMEOUT MIDDLEWARE (30 s) ---
+// Prevents any request from hanging indefinitely and blocking the event loop.
+app.use((req, res, next) => {
+    res.setTimeout(30000, () => {
+        console.error(`[TIMEOUT] Request timed out: ${req.method} ${req.path}`);
+        if (!res.headersSent) {
+            res.status(503).json({ error: 'Request timed out' });
+        }
+    });
+    next();
+});
+
 app.use(express.json());
 // Configuración estricta de CORS para permitir iframes y plataformas de terceros
 app.use(cors({
-    origin: '*', 
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// CONEXIÓN ULTRA LIMPIA A TU BASE DE DATOS
-// Cambia la línea fija por esta para que obligues a Node a leer tu panel de Railway:
+// --- MONGODB CONNECTION WITH RETRY LOGIC ---
 const MONGO_URL_FIJA = process.env.MONGO_URL_FIJA || "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
+const MONGO_MAX_RETRIES = 5;
+const MONGO_RETRY_DELAY_MS = 5000;
 
-mongoose.connect(MONGO_URL_FIJA)
-    .then(() => console.log('Conectado a MongoDB con éxito'))
-    .catch(err => {
-        console.error('--- ERROR AL CONECTAR A MONGO ---');
-        console.error(err);
-        console.error('---------------------------------');
-    });
+async function connectMongo(attempt = 1) {
+    try {
+        await mongoose.connect(MONGO_URL_FIJA, {
+            serverSelectionTimeoutMS: 10000,
+            socketTimeoutMS: 45000,
+        });
+        console.log('Conectado a MongoDB con éxito');
+    } catch (err) {
+        console.error(`--- ERROR AL CONECTAR A MONGO (intento ${attempt}/${MONGO_MAX_RETRIES}) ---`);
+        console.error(err.message);
+        if (attempt < MONGO_MAX_RETRIES) {
+            console.log(`Reintentando en ${MONGO_RETRY_DELAY_MS / 1000}s...`);
+            setTimeout(() => connectMongo(attempt + 1), MONGO_RETRY_DELAY_MS);
+        } else {
+            console.error('No se pudo conectar a MongoDB tras varios intentos. El servidor seguirá activo.');
+        }
+    }
+}
 
-// CONFIGURACIÓN DE MISTRAL AI
-// En Render añade una Variable de Entorno llamada MISTRAL_API_KEY con tu clave real.
+mongoose.connection.on('disconnected', () => {
+    console.warn('[MongoDB] Conexión perdida. Intentando reconectar...');
+});
+mongoose.connection.on('reconnected', () => {
+    console.log('[MongoDB] Reconectado con éxito.');
+});
+
+connectMongo();
+
+// --- CONFIGURACIÓN DE MISTRAL AI ---
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+const MISTRAL_TIMEOUT_MS = 9000; // 9-second hard timeout on every Mistral call
 const mistral = new Mistral({ apiKey: MISTRAL_API_KEY });
 
 // --- MODELOS ---
@@ -49,6 +82,18 @@ const Chat = mongoose.models.Chat || mongoose.model('Chat', ChatSchema);
 
 
 // --- RUTAS DE LA API ---
+
+// Health check — used by Railway to verify the service is alive
+app.get('/health', (req, res) => {
+    const dbState = mongoose.connection.readyState;
+    // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+    const dbStatus = ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown';
+    res.status(200).json({
+        status: 'ok',
+        uptime: process.uptime(),
+        db: dbStatus
+    });
+});
 
 app.get('/', (req, res) => {
     res.send('API de GNARTEJ funcionando correctamente');
@@ -169,12 +214,26 @@ app.post('/api/chat/:chatId', async (req, res) => {
         // 1. Guardamos el mensaje del usuario en la base de datos
         chat.mensajes.push({ role: 'user', content: message });
 
-        // 2. Llamamos a Mistral mandándole TODO el historial para que tenga memoria
-        // Usamos el modelo estable 'mistral-tiny' o 'mistral-large-latest' según tu cuenta
-        const respuestaMistral = await mistral.chat.complete({
-            model: 'mistral-tiny', 
+        // 2. Llamamos a Mistral con un timeout para evitar que cuelgue el servidor
+        const mistralPromise = mistral.chat.complete({
+            model: 'mistral-tiny',
             messages: chat.mensajes
         });
+
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Mistral API timeout')), MISTRAL_TIMEOUT_MS)
+        );
+
+        let respuestaMistral;
+        try {
+            respuestaMistral = await Promise.race([mistralPromise, timeoutPromise]);
+        } catch (mistralError) {
+            console.error('[Mistral] Error o timeout en la llamada a la API:', mistralError.message);
+            return res.status(504).json({
+                error: 'La IA no respondió a tiempo. Por favor, inténtalo de nuevo.',
+                detalle: mistralError.message
+            });
+        }
 
         const respuestaIA = respuestaMistral.choices[0].message.content;
 
@@ -237,8 +296,34 @@ app.delete('/api/auth/users/:id', async (req, res) => {
     }
 });
 
-// INICIALIZACIÓN ADAPTADA PARA RENDER
+// --- SERVER STARTUP ---
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor GNARTEJ corriendo en el puerto ${PORT}`);
 });
+
+// --- GRACEFUL SHUTDOWN ---
+// Railway (and other PaaS platforms) send SIGTERM before killing the process.
+// We stop accepting new connections, finish in-flight requests, then exit cleanly.
+function gracefulShutdown(signal) {
+    console.log(`[${signal}] Señal recibida. Iniciando apagado ordenado...`);
+    server.close(async () => {
+        console.log('Servidor HTTP cerrado. Cerrando conexión a MongoDB...');
+        try {
+            await mongoose.connection.close();
+            console.log('Conexión a MongoDB cerrada. Saliendo.');
+        } catch (err) {
+            console.error('Error al cerrar MongoDB:', err.message);
+        }
+        process.exit(0);
+    });
+
+    // Force-exit if graceful shutdown takes longer than 10 seconds
+    setTimeout(() => {
+        console.error('Apagado forzado tras 10s de espera.');
+        process.exit(1);
+    }, 10000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
