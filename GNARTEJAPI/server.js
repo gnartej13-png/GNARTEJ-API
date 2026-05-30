@@ -15,7 +15,8 @@ app.use(cors({
 }));
 
 // CONEXIÓN ULTRA LIMPIA A TU BASE DE DATOS
-const MONGO_URL_FIJA = "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
+// Cambia la línea fija por esta para que obligues a Node a leer tu panel de Railway:
+const MONGO_URL_FIJA = process.env.MONGO_URL_FIJA || "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
 
 mongoose.connect(MONGO_URL_FIJA)
     .then(() => console.log('Conectado a MongoDB con éxito'))
@@ -23,7 +24,7 @@ mongoose.connect(MONGO_URL_FIJA)
         console.error('--- ERROR AL CONECTAR A MONGO ---');
         console.error(err);
         console.error('---------------------------------');
-});
+    });
 
 // CONFIGURACIÓN DE MISTRAL AI
 // En Render añade una Variable de Entorno llamada MISTRAL_API_KEY con tu clave real.
