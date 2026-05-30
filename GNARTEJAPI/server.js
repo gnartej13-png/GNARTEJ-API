@@ -9,13 +9,13 @@ app.use(cors());
 
 // Conexión segura usando la variable de Render
 mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('Conectado a MongoDB de forma segura'))
+    .then(() => console.log('Conectado a MongoDB de forma segura (Sin encriptación)'))
     .catch(err => console.error('Error al conectar a MongoDB:', err));
 
 // --- MODELOS ---
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
+    password: { type: String, required: true }, // Texto plano directo
     name: String
 });
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
@@ -30,25 +30,32 @@ const Chat = mongoose.models.Chat || mongoose.model('Chat', ChatSchema);
 
 // --- RUTAS ---
 app.get('/', (req, res) => {
-    res.send('API de GNARTEJ funcionando correctamente');
+    res.send('API de GNARTEJ funcionando correctamente (Modo Texto Plano)');
 });
 
+// Registrar usuario (Guarda la contraseña tal cual llega)
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password, name } = req.body;
+        
+        // Creamos el usuario guardando la contraseña directamente sin encriptar
         const nuevoUsuario = new User({ username, password, name });
         await nuevoUsuario.save();
         res.status(201).json(nuevoUsuario);
     } catch (error) {
-        res.status(400).json({ error: 'Error al registrar usuario' });
+        res.status(400).json({ error: 'Error al registrar usuario (El nombre ya existe)' });
     }
 });
 
+// Iniciar sesión (Compara la contraseña directamente en texto plano)
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
+        
+        // Busca que coincidan exactamente el usuario y la contraseña tal cual se escribieron
         const usuario = await User.findOne({ username, password });
         if (!usuario) return res.status(401).json({ error: 'Credenciales incorrectas' });
+        
         res.json(usuario);
     } catch (error) {
         res.status(500).json({ error: 'Error en el servidor' });
