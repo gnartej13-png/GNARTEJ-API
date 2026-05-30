@@ -15,7 +15,7 @@ app.use(cors({
 }));
 
 // CONEXIÓN ULTRA LIMPIA A TU BASE DE DATOS
-const MONGO_URL_FIJA = process.env.MONGO_URL || "mongodb+srv://gnartej:gnartej123@gnartej.8b6ee.mongodb.net/gnartej?retryWrites=true&w=majority";
+const MONGO_URL_FIJA = "mongodb+srv://gnartej:gnartej123@gnartej.8b6ee.mongodb.net/gnartej?retryWrites=true&w=majority";
 mongoose.connect(MONGO_URL_FIJA)
     .then(() => console.log('Conectado a MongoDB con éxito'))
     .catch(err => {
