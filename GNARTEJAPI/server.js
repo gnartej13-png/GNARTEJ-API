@@ -7,7 +7,12 @@ require('dotenv').config();
 const app = express();
 
 app.use(express.json());
-app.use(cors());
+// Configuración estricta de CORS para permitir iframes y plataformas de terceros
+app.use(cors({
+    origin: '*', 
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // CONEXIÓN ULTRA LIMPIA A TU BASE DE DATOS
 const MONGO_URL_FIJA = "mongodb+srv://asierf06:gnartej123@gnartej.8b6ee.mongodb.net/gnartej?retryWrites=true&w=majority".trim();
