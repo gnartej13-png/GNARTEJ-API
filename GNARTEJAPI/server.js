@@ -15,7 +15,7 @@ app.use(cors({
 }));
 
 // CONEXIÓN ULTRA LIMPIA A TU BASE DE DATOS
-const MONGO_URL_FIJA = "mongodb://gnartej:gnartej123@ac-8b6ee-shard-00-00.mongodb.net:27017,ac-8b6ee-shard-00-01.mongodb.net:27017,ac-8b6ee-shard-00-02.mongodb.net:27017/gnartej?ssl=true&replicaSet=atlas-8b6ee-shard-0&authSource=admin&retryWrites=true&w=majority";
+const MONGO_URL_FIJA = "mongodb+srv://gnartej:gnartej123@gnartej.8b6ee.mongodb.net/gnartej?retryWrites=true&w=majority";
 mongoose.connect(MONGO_URL_FIJA)
     .then(() => console.log('Conectado a MongoDB con éxito'))
     .catch(err => {
