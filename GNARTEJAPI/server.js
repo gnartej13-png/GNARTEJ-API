@@ -38,12 +38,17 @@ app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password, name } = req.body;
         
-        // Creamos el usuario guardando la contraseña directamente sin encriptar
+        // Comprobar si ya existe antes de registrar
+        const existe = await User.findOne({ username });
+        if (existe) {
+            return res.status(400).json({ error: 'El nombre de usuario ya existe' });
+        }
+
         const nuevoUsuario = new User({ username, password, name });
         await nuevoUsuario.save();
         res.status(201).json(nuevoUsuario);
     } catch (error) {
-        res.status(400).json({ error: 'Error al registrar usuario (El nombre ya existe)' });
+        res.status(400).json({ error: 'Error al registrar usuario' });
     }
 });
 
@@ -52,11 +57,21 @@ app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         
-        // Busca que coincidan exactamente el usuario y la contraseña tal cual se escribieron
-        const usuario = await User.findOne({ username, password });
-        if (!usuario) return res.status(401).json({ error: 'Credenciales incorrectas' });
+        // 1. Buscamos primero si el usuario existe por su nombre
+        const existeUsuario = await User.findOne({ username });
+        if (!existeUsuario) {
+            // SI NO EXISTE, devolvemos 404 (Así la web sabe que tiene que registrarlo)
+            return res.status(404).json({ error: 'El usuario no existe' });
+        }
+
+        // 2. Si existe, comprobamos si la contraseña coincide
+        if (existeUsuario.password !== password) {
+            // SI EXISTE PERO LA CLAVE ESTÁ MAL, devolvemos 401
+            return res.status(401).json({ error: 'Contraseña incorrecta' });
+        }
         
-        res.json(usuario);
+        // Si todo está bien, iniciamos sesión
+        res.json(existeUsuario);
     } catch (error) {
         res.status(500).json({ error: 'Error en el servidor' });
     }
