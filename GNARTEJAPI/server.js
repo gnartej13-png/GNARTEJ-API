@@ -15,14 +15,15 @@ app.use(cors({
 }));
 
 // CONEXIÓN ULTRA LIMPIA A TU BASE DE DATOS
-const MONGO_URL_FIJA = "mongodb+srv://gnartej:gnartej123@gnartej.8b6ee.mongodb.net/gnartej?retryWrites=true&w=majority";
+const MONGO_URL_FIJA = "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
+
 mongoose.connect(MONGO_URL_FIJA)
     .then(() => console.log('Conectado a MongoDB con éxito'))
     .catch(err => {
         console.error('--- ERROR AL CONECTAR A MONGO ---');
         console.error(err);
         console.error('---------------------------------');
-    });
+});
 
 // CONFIGURACIÓN DE MISTRAL AI
 // En Render añade una Variable de Entorno llamada MISTRAL_API_KEY con tu clave real.
