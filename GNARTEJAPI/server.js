@@ -26,7 +26,7 @@ mongoose.connect(MONGO_URL_FIJA)
 
 // CONFIGURACIÓN DE MISTRAL AI
 // En Render añade una Variable de Entorno llamada MISTRAL_API_KEY con tu clave real.
-const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || "PON_AQUI_TU_API_KEY_DE_MISTRAL_SI_NO_USAS_ENV";
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const mistral = new Mistral({ apiKey: MISTRAL_API_KEY });
 
 // --- MODELOS ---
