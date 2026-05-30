@@ -219,7 +219,7 @@ app.post('/api/chat/:chatId', async (req, res) => {
         // 2. Llamamos a Mistral con un timeout para evitar que cuelgue el servidor
         // Using mistral-small: responds directly without web search behaviour
         const mistralPromise = mistral.chat.complete({
-            model: 'mistral-small',
+            model: 'mistral-small-latest',
             messages: chat.mensajes
         });
 
