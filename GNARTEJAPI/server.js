@@ -6,12 +6,18 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// CONEXIÓN ORIGINAL A TU BASE DE DATOS (NO SE TOCA)
-mongoose.connect('mongodb+srv://asierf06:gnartej123@gnartej.8b6ee.mongodb.net/gnartej?retryWrites=true&w=majority&appName=gnartej')
-    .then(() => console.log('Conectado a MongoDB'))
-    .catch(err => console.error('Error al conectar a MongoDB:', err));
+// CONEXIÓN CORREGIDA: Sin espacios invisibles ni parámetros conflictivos para Render
+const MONGO_URL_FIJA = "mongodb+srv://asierf06:gnartej123@gnartej.8b6ee.mongodb.net/gnartej?retryWrites=true&w=majority".trim();
 
-// --- MODELOS ---
+mongoose.connect(MONGO_URL_FIJA)
+    .then(() => console.log('Conectado a MongoDB con éxito'))
+    .catch(err => {
+        console.error('--- ERROR CRÍTICO DE CONEXIÓN A MONGO ---');
+        console.error(err);
+        console.error('-----------------------------------------');
+    });
+
+// --- MODELOS DE DATOS ---
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -27,14 +33,13 @@ const ChatSchema = new mongoose.Schema({
 });
 const Chat = mongoose.models.Chat || mongoose.model('Chat', ChatSchema);
 
-
-// --- RUTAS API ---
+// --- RUTAS DE LA API ---
 
 app.get('/', (req, res) => {
     res.send('API de GNARTEJ funcionando correctamente');
 });
 
-// Registro
+// Registro de usuarios
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password, name } = req.body;
@@ -50,18 +55,16 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// Login (CORREGIDO: Devuelve 404 si el usuario no existe para que el front lo registre)
+// Inicio de sesión (Devuelve 404 si no existe para que la web lo registre automáticamente)
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         
-        // 1. Buscamos primero si el usuario existe
         const usuario = await User.findOne({ username });
         if (!usuario) {
             return res.status(404).json({ error: 'El usuario no existe' });
         }
         
-        // 2. Si existe, comprobamos la contraseña
         if (usuario.password !== password) {
             return res.status(401).json({ error: 'Contraseña incorrecta' });
         }
@@ -72,7 +75,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// Obtener chats de un usuario
+// Obtener chats de un usuario específico
 app.get('/api/chats/:userId', async (req, res) => {
     try {
         const chats = await Chat.find({ userId: req.params.userId }).sort({ fecha: -1 });
@@ -82,7 +85,7 @@ app.get('/api/chats/:userId', async (req, res) => {
     }
 });
 
-// Crear nuevo chat
+// Crear un nuevo chat en blanco
 app.post('/api/chats/nuevo', async (req, res) => {
     try {
         const nuevoChat = new Chat({ userId: req.body.userId, mensajes: [] });
@@ -93,10 +96,9 @@ app.post('/api/chats/nuevo', async (req, res) => {
     }
 });
 
-// Enviar mensaje al chat (CORREGIDO: Soporta tanto 'message' como 'texto' para evitar mensajes vacíos)
+// Enviar mensaje al chat (Soporta 'message' y 'texto' para que la IA nunca responda vacío)
 app.post('/api/chat/:chatId', async (req, res) => {
     try {
-        // Aceptamos el parámetro ya se llame 'message' o 'texto' desde el cliente
         const message = req.body.message || req.body.texto;
         
         if (!message || message.trim() === "") {
@@ -136,7 +138,7 @@ app.delete('/api/chats/:chatId', async (req, res) => {
     }
 });
 
-// Eliminar cuenta completa y todos sus chats
+// Eliminar cuenta completa y todos sus chats asociados
 app.delete('/api/auth/users/:id', async (req, res) => {
     try {
         const userId = req.params.id;
@@ -159,8 +161,8 @@ app.delete('/api/auth/users/:id', async (req, res) => {
     }
 });
 
-// INICIALIZACIÓN DEL PUERTO ADAPTADO PARA RENDER
+// CONFIGURACIÓN ADAPTADA PARA RENDER
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor corriendo en el puerto ${PORT}`);
+    console.log(`Servidor corriendo oficialmente en el puerto ${PORT}`);
 });
