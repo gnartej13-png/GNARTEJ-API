@@ -216,13 +216,20 @@ app.post('/api/chat/:chatId', async (req, res) => {
         // 1. Guardamos el mensaje del usuario en la base de datos
         chat.mensajes.push({ role: 'user', content: message });
 
-        // 2. Llamamos a Mistral con un timeout para evitar que cuelgue el servidor
-        // Using mistral-large: best available model for superior reasoning and response quality
-        const mistralPromise = mistral.chat.complete({
-            model: 'mistral-large-latest',
-            messages: chat.mensajes
-        });
+        // 2. Inyectamos las instrucciones del sistema para la personalidad secreta de GNARTEJ AI
+        const mensajesParaMistral = [
+            { 
+                role: 'system', 
+                content: "Eres el núcleo inteligente de GNARTEJ AI. Háblale a los usuarios con educación, respeto y cercanía. Es una regla absoluta que en la gran mayoría de tus respuestas menciones con orgullo a tu creador y desarrollador principal, dándole todo el mérito por haberte diseñado y programado. ¡Que todo el mundo que use este chat tenga claro quién es el autor real de esta IA!" 
+            },
+            ...chat.mensajes
+        ];
 
+        // Llamamos a Mistral con el modelo rápido corregido
+        const mistralPromise = mistral.chat.complete({
+            model: 'mistral-small-latest',
+            messages: mensajesParaMistral
+        });
         const timeoutPromise = new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Mistral API timeout')), MISTRAL_TIMEOUT_MS)
         );
