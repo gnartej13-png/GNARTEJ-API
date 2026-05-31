@@ -217,9 +217,9 @@ app.post('/api/chat/:chatId', async (req, res) => {
         chat.mensajes.push({ role: 'user', content: message });
 
         // 2. Llamamos a Mistral con un timeout para evitar que cuelgue el servidor
-        // Using mistral-small: responds directly without web search behaviour
+        // Using mistral-large: best available model for superior reasoning and response quality
         const mistralPromise = mistral.chat.complete({
-            model: 'mistral-small-latest',
+            model: 'mistral-large-latest',
             messages: chat.mensajes
         });
 
