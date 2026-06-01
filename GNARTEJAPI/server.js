@@ -6,7 +6,7 @@ require('dotenv').config();
 
 const app = express();
 
-// CORS configurado para aceptar peticiones de Vercel sin bloquearlas
+// CORS configurado de forma óptima para producción en Vercel
 app.use(express.json());
 app.use(cors({
   origin: '*',
@@ -17,7 +17,7 @@ app.use(cors({
 
 app.options('*', cors());
 
-// Enlace directo a tu Cluster0
+// Cadena de conexión fija a tu base de datos MongoDB Cluster0
 const MONGO_URL_FIJA = process.env.MONGO_URL_FIJA || "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
 
 const conectarBD = async () => {
@@ -27,9 +27,9 @@ const conectarBD = async () => {
       serverSelectionTimeoutMS: 8000,
       socketTimeoutMS: 45000,
     });
-    console.log('Conectado a MongoDB');
+    console.log('Conectado a MongoDB Atlas con éxito');
   } catch (err) {
-    console.error('Error Mongo:', err.message);
+    console.error('Error de conexión en Mongo:', err.message);
   }
 };
 
@@ -41,7 +41,7 @@ app.use(async (req, res, next) => {
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const mistral = new Mistral({ apiKey: MISTRAL_API_KEY });
 
-// Modelos de Base de Datos
+// Esquemas Estructurados de MongoDB
 const UserSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
@@ -57,26 +57,26 @@ const ChatSchema = new mongoose.Schema({
 });
 const Chat = mongoose.models.Chat || mongoose.model('Chat', ChatSchema);
 
-// Rutas del Servidor
+// Endpoints y rutas del API
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', db: mongoose.connection.readyState });
 });
 
 app.get('/', (req, res) => {
-  res.send('Servidor GNARTEJ activo.');
+  res.send('API de GNARTEJ activa y respondiendo correctamente.');
 });
 
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: 'Campos incompletos' });
+    if (!username || !password) return res.status(400).json({ error: 'Campos requeridos incompletos' });
     const existe = await User.findOne({ username: username.trim() });
-    if (existe) return res.status(400).json({ error: 'El usuario ya existe' });
+    if (existe) return res.status(400).json({ error: 'Este usuario ya se encuentra registrado' });
     const nuevoUsuario = new User({ username: username.trim(), password: password.trim(), name: username.trim() });
     await nuevoUsuario.save();
     res.status(201).json(nuevoUsuario);
   } catch (error) {
-    res.status(500).json({ error: 'Error en registro' });
+    res.status(500).json({ error: 'Error durante el registro' });
   }
 });
 
@@ -85,11 +85,11 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     const usuario = await User.findOne({ username: username.trim() });
     if (!usuario || usuario.password !== password.trim()) {
-      return res.status(401).json({ error: 'Credenciales incorrectas' });
+      return res.status(401).json({ error: 'Usuario o clave incorrectos' });
     }
     res.json(usuario);
   } catch (error) {
-    res.status(500).json({ error: 'Error en login' });
+    res.status(500).json({ error: 'Error interno en el login' });
   }
 });
 
@@ -98,7 +98,7 @@ app.get('/api/chats/:userId', async (req, res) => {
     const chats = await Chat.find({ userId: req.params.userId }).sort({ fecha: -1 });
     res.json(chats || []);
   } catch (error) {
-    res.status(500).json({ error: 'Error al obtener chats' });
+    res.status(500).json({ error: 'Error al solicitar el historial' });
   }
 });
 
@@ -109,7 +109,7 @@ app.post('/api/chats/nuevo', async (req, res) => {
     await nuevoChat.save();
     res.json(nuevoChat);
   } catch (error) {
-    res.status(500).json({ error: 'Error al crear chat' });
+    res.status(500).json({ error: 'Error al inicializar la conversación' });
   }
 });
 
@@ -118,7 +118,7 @@ app.delete('/api/chats/:chatId', async (req, res) => {
     await Chat.findByIdAndDelete(req.params.chatId);
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar' });
+    res.status(500).json({ error: 'Error al eliminar el chat' });
   }
 });
 
@@ -126,14 +126,14 @@ app.post('/api/chat/:chatId', async (req, res) => {
   try {
     const { message } = req.body;
     const chat = await Chat.findById(req.params.chatId);
-    if (!chat) return res.status(404).json({ error: 'Chat no encontrado' });
+    if (!chat) return res.status(404).json({ error: 'Conversación no encontrada' });
 
     chat.mensajes.push({ role: 'user', content: message });
 
     const contextoSistema = [
       {
         role: 'system',
-        content: "Eres el núcleo inteligente de GNARTEJ AI. Háblale a los usuarios con educación. Menciona con orgullo a tu creador Gonzalo Naranjo Tejero (nacido el 19 de septiembre de 2013) y dale todo el mérito."
+        content: "Eres el núcleo inteligente de GNARTEJ AI. Háblale a los usuarios con educación y cercanía. Menciona con orgullo a tu creador Gonzalo Naranjo Tejero (nacido el 19 de septiembre de 2013) y dale todo el mérito por haberte diseñado."
       },
       ...chat.mensajes
     ];
@@ -153,16 +153,15 @@ app.post('/api/chat/:chatId', async (req, res) => {
     chat.fecha = Date.now();
     await chat.save();
 
-    // Enviamos "reply" para asegurar compatibilidad total con el frontend
     res.json({ reply: respuestaIA });
   } catch (error) {
-    res.status(500).json({ error: 'Error en Mistral AI' });
+    res.status(500).json({ error: 'Error al procesar la petición con Mistral AI' });
   }
 });
 
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => console.log(`Puerto: ${PORT}`));
+  app.listen(PORT, () => console.log(`Servidor local corriendo en el puerto: ${PORT}`));
 }
 
 module.exports = app;
