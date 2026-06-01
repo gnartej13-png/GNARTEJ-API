@@ -29,7 +29,6 @@ app.use(cors({
 // --- MONGODB CONNECTION FOR SERVERLESS (VERCEL) ---
 const MONGO_URL_FIJA = process.env.MONGO_URL_FIJA || "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
 
-// Middleware para asegurar la conexión a MongoDB en cada petición (Esencial para Vercel)
 const conectarBDMiddleware = async (req, res, next) => {
   if (mongoose.connection.readyState >= 1) {
     return next();
@@ -47,7 +46,6 @@ const conectarBDMiddleware = async (req, res, next) => {
   }
 };
 
-// Aplicamos el middleware de conexión a todas las rutas de la API
 app.use('/api', conectarBDMiddleware);
 
 // --- CONFIGURACIÓN DE MISTRAL AI ---
@@ -61,7 +59,6 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   name: String
 });
-
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
 
 const ChatSchema = new mongoose.Schema({
@@ -70,7 +67,6 @@ const ChatSchema = new mongoose.Schema({
   mensajes: { type: Array, default: [] },
   fecha: { type: Date, default: Date.now }
 });
-
 const Chat = mongoose.models.Chat || mongoose.model('Chat', ChatSchema);
 
 // --- RUTAS DE LA API ---
@@ -78,13 +74,7 @@ app.get('/health', async (req, res) => {
   if (mongoose.connection.readyState !== 1) {
     await mongoose.connect(MONGO_URL_FIJA).catch(() => {});
   }
-  const dbState = mongoose.connection.readyState;
-  const dbStatus = ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown';
-  res.status(200).json({
-    status: 'ok',
-    uptime: process.uptime(),
-    db: dbStatus
-  });
+  res.status(200).json({ status: 'ok', db: mongoose.connection.readyState });
 });
 
 app.get('/', (req, res) => {
@@ -98,26 +88,16 @@ app.post('/api/auth/register', async (req, res) => {
     const password = req.body.password ? req.body.password.trim() : null;
     const name = req.body.name ? req.body.name.trim() : username;
 
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Faltan campos obligatorios: username o password' });
-    }
+    if (!username || !password) return res.status(400).json({ error: 'Faltan campos obligatorios' });
 
     const existe = await User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
-    if (existe) {
-      return res.status(400).json({ error: 'El usuario ya existe' });
-    }
+    if (existe) return res.status(400).json({ error: 'El usuario ya existe' });
 
     const nuevoUsuario = new User({ username, password, name });
     await nuevoUsuario.save();
-    console.log(`[OK] Usuario registrado con éxito: ${username}`);
-    res.status(201).json({
-      _id: nuevoUsuario._id,
-      username: nuevoUsuario.username,
-      name: nuevoUsuario.name
-    });
+    res.status(201).json({ _id: nuevoUsuario._id, username: nuevoUsuario.username, name: nuevoUsuario.name });
   } catch (error) {
-    console.error("FAIL EN RUTA REGISTER:", error);
-    res.status(500).json({ error: 'Error al registrar usuario', detalle: error.message });
+    res.status(500).json({ error: 'Error al registrar usuario' });
   }
 });
 
@@ -127,34 +107,19 @@ app.post('/api/auth/login', async (req, res) => {
     const username = req.body.username ? req.body.username.trim() : null;
     const password = req.body.password ? req.body.password.trim() : null;
 
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Falta usuario o contraseña en la petición' });
-    }
+    if (!username || !password) return res.status(400).json({ error: 'Falta usuario o contraseña' });
 
     const usuario = await User.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
-    if (!usuario) {
-      console.log(`[404] Intento de login con usuario inexistente: ${username}`);
-      return res.status(404).json({ error: 'El usuario no existe' });
-    }
+    if (!usuario) return res.status(404).json({ error: 'El usuario no existe' });
+    if (usuario.password !== password) return res.status(401).json({ error: 'Contraseña incorrecta' });
 
-    if (usuario.password !== password) {
-      console.log(`[401] Contraseña incorrecta para el usuario: ${username}`);
-      return res.status(401).json({ error: 'Contraseña incorrecta' });
-    }
-
-    console.log(`[OK] Login correcto: ${username}`);
-    res.json({
-      _id: usuario._id,
-      username: usuario.username,
-      name: usuario.name
-    });
+    res.json({ _id: usuario._id, username: usuario.username, name: usuario.name });
   } catch (error) {
-    console.error("FAIL CRÍTICO EN RUTA LOGIN:", error);
-    res.status(500).json({ error: 'Error interno del servidor', detalle: error.message });
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
-// Obtener chats de un usuario
+// Obtener chats de un usuario (Ordenados por última modificación de fecha)
 app.get('/api/chats/:userId', async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.userId)) {
@@ -163,7 +128,6 @@ app.get('/api/chats/:userId', async (req, res) => {
     const chats = await Chat.find({ userId: req.params.userId }).sort({ fecha: -1 });
     res.json(chats || []);
   } catch (error) {
-    console.error("FAIL EN GET CHATS:", error);
     res.status(500).json({ error: 'Error al obtener chats' });
   }
 });
@@ -179,27 +143,34 @@ app.post('/api/chats/nuevo', async (req, res) => {
     await nuevoChat.save();
     res.json(nuevoChat);
   } catch (error) {
-    console.error("FAIL EN NUEVO CHAT:", error);
     res.status(500).json({ error: 'Error al crear chat' });
   }
 });
 
-// Enviar mensaje al chat CON MISTRAL AI REAL
-app.post('/api/chat/:chatId', async (req, res) => {
+// BORRAR CHAT (Ruta crítica que faltaba y crasheaba el frontend)
+app.delete('/api/chats/:chatId', async (req, res) => {
   try {
-    const message = req.body.message || req.body.texto;
-    if (!message || message.trim() === "") {
-      return res.status(400).json({ error: 'El mensaje no puede estar vacío' });
-    }
-
     if (!mongoose.Types.ObjectId.isValid(req.params.chatId)) {
       return res.status(400).json({ error: 'ID de chat inválido' });
     }
+    await Chat.findByIdAndDelete(req.params.chatId);
+    res.json({ success: true, message: 'Chat eliminado correctamente' });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al eliminar el chat' });
+  }
+});
+
+// Enviar mensaje al chat con Mistral
+app.post('/api/chat/:chatId', async (req, res) => {
+  try {
+    const message = req.body.message || req.body.texto;
+    if (!message || message.trim() === "") return res.status(400).json({ error: 'Mensaje vacío' });
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.chatId)) return res.status(400).json({ error: 'ID inválido' });
 
     const chat = await Chat.findById(req.params.chatId);
     if (!chat) return res.status(404).json({ error: 'Chat no encontrado' });
 
-    console.log(`[Chat] Procesando mensaje para chatId=${req.params.chatId}`);
     chat.mensajes.push({ role: 'user', content: message });
 
     const mensajesParaMistral = [
@@ -219,19 +190,8 @@ app.post('/api/chat/:chatId', async (req, res) => {
       setTimeout(() => reject(new Error('Mistral API timeout')), MISTRAL_TIMEOUT_MS);
     });
 
-    let respuestaMistral;
-    try {
-      respuestaMistral = await Promise.race([mistralPromise, timeoutPromise]);
-    } catch (mistralError) {
-      console.error('[Mistral] Error o timeout en la llamada a la API:', mistralError.message);
-      return res.status(504).json({
-        error: 'La IA no respondió a tiempo. Por favor, inténtalo de nuevo.',
-        detalle: mistralError.message
-      });
-    }
-
+    let respuestaMistral = await Promise.race([mistralPromise, timeoutPromise]);
     const respuestaIA = respuestaMistral.choices[0].message.content;
-    console.log(`[Mistral] Respuesta recibida (${respuestaIA.length} chars) para chatId=${req.params.chatId}`);
     
     chat.mensajes.push({ role: 'assistant', content: respuestaIA });
 
@@ -243,19 +203,14 @@ app.post('/api/chat/:chatId', async (req, res) => {
     await chat.save();
 
     res.json({ reply: respuestaIA });
-
   } catch (error) {
-    console.error("FAIL EN ENVIAR MENSAJE CON MISTRAL:", error);
-    res.status(500).json({ error: 'Error al procesar mensaje con la IA', detalle: error.message });
+    res.status(500).json({ error: 'Error al procesar la IA' });
   }
 });
 
-// --- AJUSTE EXCLUSIVO PARA VERCEL SERVERLESS ---
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`Servidor corriendo en desarrollo en el puerto ${PORT}`);
-  });
+  app.listen(PORT, () => console.log(`Corriendo en puerto ${PORT}`));
 }
 
 module.exports = app;
