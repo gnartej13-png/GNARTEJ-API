@@ -52,7 +52,7 @@ app.use('/api', conectarBDMiddleware);
 
 // --- CONFIGURACIÓN DE MISTRAL AI ---
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
-const MISTRAL_TIMEOUT_MS = 9000; 
+const MISTRAL_TIMEOUT_MS = 9000;
 const mistral = new Mistral({ apiKey: MISTRAL_API_KEY });
 
 // --- MODELOS ---
@@ -61,6 +61,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   name: String
 });
+
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
 
 const ChatSchema = new mongoose.Schema({
@@ -69,11 +70,11 @@ const ChatSchema = new mongoose.Schema({
   mensajes: { type: Array, default: [] },
   fecha: { type: Date, default: Date.now }
 });
+
 const Chat = mongoose.models.Chat || mongoose.model('Chat', ChatSchema);
 
 // --- RUTAS DE LA API ---
 app.get('/health', async (req, res) => {
-  // Intentamos conectar rápido para dar un estatus real
   if (mongoose.connection.readyState !== 1) {
     await mongoose.connect(MONGO_URL_FIJA).catch(() => {});
   }
@@ -109,7 +110,6 @@ app.post('/api/auth/register', async (req, res) => {
     const nuevoUsuario = new User({ username, password, name });
     await nuevoUsuario.save();
     console.log(`[OK] Usuario registrado con éxito: ${username}`);
-    
     res.status(201).json({
       _id: nuevoUsuario._id,
       username: nuevoUsuario.username,
@@ -191,6 +191,7 @@ app.post('/api/chat/:chatId', async (req, res) => {
     if (!message || message.trim() === "") {
       return res.status(400).json({ error: 'El mensaje no puede estar vacío' });
     }
+
     if (!mongoose.Types.ObjectId.isValid(req.params.chatId)) {
       return res.status(400).json({ error: 'ID de chat inválido' });
     }
@@ -231,70 +232,30 @@ app.post('/api/chat/:chatId', async (req, res) => {
 
     const respuestaIA = respuestaMistral.choices[0].message.content;
     console.log(`[Mistral] Respuesta recibida (${respuestaIA.length} chars) para chatId=${req.params.chatId}`);
-
+    
     chat.mensajes.push({ role: 'assistant', content: respuestaIA });
 
     if (chat.titulo === 'Nueva conversación') {
       chat.titulo = message.substring(0, 25) + (message.length > 25 ? '...' : '');
     }
-    chat.fecha = Date.now();
 
-    try {
-      await chat.save();
-      console.log(`[MongoDB] Chat guardado con éxito: chatId=${req.params.chatId}`);
-    } catch (saveError) {
-      console.error(`[MongoDB] FALLO al guardar el chat:`, saveError.message);
-      return res.status(500).json({
-        error: 'La IA respondió pero no se pudo guardar la conversación en la base de datos.',
-        detalle: saveError.message
-      });
-    }
+    chat.fecha = Date.now();
+    await chat.save();
 
     res.json({ reply: respuestaIA });
+
   } catch (error) {
     console.error("FAIL EN ENVIAR MENSAJE CON MISTRAL:", error);
     res.status(500).json({ error: 'Error al procesar mensaje con la IA', detalle: error.message });
   }
 });
 
-// Eliminar un chat específico
-app.delete('/api/chats/:chatId', async (req, res) => {
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.chatId)) {
-      return res.status(400).json({ error: "ID de chat inválido" });
-    }
-    const resultado = await Chat.findByIdAndDelete(req.params.chatId);
-    if (!resultado) {
-      return res.status(404).json({ error: "Chat no encontrado" });
-    }
-    res.json({ message: "Chat eliminado con éxito" });
-  } catch (error) {
-    res.status(500).json({ error: "Error al eliminar el chat" });
-  }
-});
+// --- AJUSTE EXCLUSIVO PARA VERCEL SERVERLESS ---
+const PORT = process.env.PORT || 3000;
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Servidor corriendo en desarrollo en el puerto ${PORT}`);
+  });
+}
 
-// Eliminar cuenta completa
-app.delete('/api/auth/users/:id', async (req, res) => {
-  try {
-    const userId = req.params.id;
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({ error: "ID de usuario no válido" });
-    }
-    await Chat.deleteMany({ userId: userId });
-    const usuarioEliminado = await User.findByIdAndDelete(userId);
-    if (!usuarioEliminado) {
-      return res.status(404).json({ error: "Usuario no encontrado" });
-    }
-    res.status(200).json({ message: "Cuenta eliminada correctamente" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error interno del servidor al borrar cuenta" });
-  }
-});
-
-// --- SERVER STARTUP ---
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`Servidor GNARTEJ corriendo en el puerto ${PORT}`);
-});
-
+module.exports = app;
