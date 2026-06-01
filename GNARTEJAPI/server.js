@@ -1,102 +1,199 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GNARTEJ AI</title>
-    <style>
-        /* --- VARIABLES PARA LOS TEMAS (CLARO Y OSCURO) --- */
-        :root {
-            --bg-principal: #0f0f11;
-            --bg-chat: #141417;
-            --bg-cabecera: #1a1a1f;
-            --bg-tarjeta: #141417;
-            --bg-item: #141417;
-            --bg-item-hover: #1a1a1f;
-            --texto-principal: #f1f1f3;
-            --texto-secundario: #a1a1aa;
-            --borde: #26262f;
-            --borde-fuerte: #2e2e38;
-            --verde-fosforito: #00ff99;
-            --ai-msg-bg: #1a1a1f;
-            --ai-msg-texto: #e4e4e7;
-            --bg-modal-overlay: rgba(15, 15, 17, 0.96);
-            --bg-modal-alerta: rgba(9, 9, 11, 0.9);
-        }
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const { Mistral } = require('@mistralai/mistralai');
+require('dotenv').config();
 
-        /* Cuando se activa el modo claro */
-        [data-theme="claro"] {
-            --bg-principal: #f4f4f5;
-            --bg-chat: #ffffff;
-            --bg-cabecera: #e4e4e7;
-            --bg-tarjeta: #ffffff;
-            --bg-item: #fafafa;
-            --bg-item-hover: #f4f4f5;
-            --texto-principal: #09090b;
-            --texto-secundario: #71717a;
-            --borde: #e4e4e7;
-            --borde-fuerte: #d4d4d8;
-            --ai-msg-bg: #f4f4f5;
-            --ai-msg-texto: #09090b;
-            --bg-modal-overlay: rgba(244, 244, 245, 0.96);
-            --bg-modal-alerta: rgba(228, 228, 231, 0.9);
-        }
+const app = express();
 
-        * { 
-            box-sizing: border-box; 
-            margin: 0; 
-            padding: 0; 
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
-            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-        }
+// --- CONFIGURACIÓN DE CORS COMPATIBLE ---
+app.use(express.json());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  credentials: true
+}));
 
-        html, body {
-            background-color: var(--bg-principal);
-            color: var(--texto-principal);
-            height: 100vh;
-            width: 100%;
-            overflow: hidden;
-        }
+app.options('*', cors());
 
-        #loading-screen {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background-color: #0f0f11;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            gap: 24px;
-            transition: opacity 0.5s ease, transform 0.5s ease;
-        }
+// URL Fija de tu MongoDB Atlas (Cluster0)
+const MONGO_URL_FIJA = process.env.MONGO_URL_FIJA || "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
 
-        .spinner {
-            width: 56px; height: 56px;
-            border: 4px solid #1f1f24;
-            border-top: 4px solid var(--verde-fosforito);
-            border-radius: 50%;
-            animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-            box-shadow: 0 0 15px rgba(0, 255, 153, 0.2);
-        }
+const conectarBD = async () => {
+  if (mongoose.connection.readyState >= 1) return;
+  try {
+    await mongoose.connect(MONGO_URL_FIJA, {
+      serverSelectionTimeoutMS: 8000,
+      socketTimeoutMS: 45000,
+    });
+    console.log('Conectado a MongoDB Atlas con éxito');
+  } catch (err) {
+    console.error('Error al conectar a Mongo:', err.message);
+  }
+};
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+app.use(async (req, res, next) => {
+  await conectarBD();
+  next();
+});
 
-        .app-container { 
-            display: flex; 
-            width: 100%; 
-            height: 100vh; 
-            overflow: hidden; 
-        }
+// Inicialización de la API de Mistral
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+const mistral = new Mistral({ apiKey: MISTRAL_API_KEY });
 
-        .chat-area { 
-            flex: 1; 
-            display: flex; 
-            flex-direction: column; 
+// --- MODELOS DE LA BASE DE DATOS (Adaptados a tus esquemas de Colección) ---
+const UserSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  name: String
+});
+const User = mongoose.models.User || mongoose.model('User', UserSchema);
+
+const ChatSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  titulo: { type: String, default: 'Nueva conversación' },
+  mensajes: { type: Array, default: [] },
+  fecha: { type: Date, default: Date.now }
+});
+const Chat = mongoose.models.Chat || mongoose.model('Chat', ChatSchema);
+
+// --- RUTAS PRINCIPALES Y HEALTH-CHECK ---
+app.get('/health', (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const dbStatus = ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown';
+  res.status(200).json({ status: 'ok', db: dbStatus });
+});
+
+app.get('/', (req, res) => {
+  res.send('API de GNARTEJ activa, respondiendo y lista para la UI del doc chateo.');
+});
+
+// Ruta de Login (Inicio de sesión)
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Campos vacíos' });
+
+    const usuario = await User.findOne({ username: username.trim() });
+    if (!usuario || usuario.password !== password.trim()) {
+      return res.status(401).json({ error: 'Usuario o clave incorrectos' });
+    }
+    res.json(usuario);
+  } catch (error) {
+    res.status(500).json({ error: 'Error en el inicio de sesión' });
+  }
+});
+
+// Ruta de Registro (Creación automática desde tu interfaz)
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Datos insuficientes' });
+
+    const existe = await User.findOne({ username: username.trim() });
+    if (existe) return res.status(400).json({ error: 'El nombre de usuario ya está ocupado' });
+
+    const nuevoUsuario = new User({ 
+      username: username.trim(), 
+      password: password.trim(), 
+      name: username.trim() 
+    });
+    await nuevoUsuario.save();
+    res.status(201).json(nuevoUsuario);
+  } catch (error) {
+    res.status(500).json({ error: 'Error en el proceso de registro masivo' });
+  }
+});
+
+// Obtener el listado de chats de un usuario específico
+app.get('/api/chats/:userId', async (req, res) => {
+  try {
+    const chats = await Chat.find({ userId: req.params.userId }).sort({ fecha: -1 });
+    res.json(chats || []);
+  } catch (error) {
+    res.status(500).json({ error: 'Imposible recuperar el historial de chats' });
+  }
+});
+
+// Crear una nueva conversación limpia en el panel lateral
+app.post('/api/chats/nuevo', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'ID de usuario requerido' });
+
+    const nuevoChat = new Chat({ userId, mensajes: [] });
+    await nuevoChat.save();
+    res.json(nuevoChat);
+  } catch (error) {
+    res.status(500).json({ error: 'Fallo al inicializar un nuevo espacio de chat' });
+  }
+});
+
+// Eliminar de forma permanente un chat mediante la papelera de reciclaje
+app.delete('/api/chats/:chatId', async (req, res) => {
+  try {
+    await Chat.findByIdAndDelete(req.params.chatId);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Fallo al eliminar el chat seleccionado' });
+  }
+});
+
+// Procesar mensajes e interactuar de forma fluida con Mistral AI
+app.post('/api/chat/:chatId', async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: 'Mensaje vacío' });
+
+    const chat = await Chat.findById(req.params.chatId);
+    if (!chat) return res.status(404).json({ error: 'La conversación no existe' });
+
+    // Guardamos el mensaje que escribe el usuario de forma limpia
+    chat.mensajes.push({ role: 'user', content: message });
+
+    // Inyección de la directiva de identidad corporativa de GNARTEJ AI
+    const contextoSistema = [
+      {
+        role: 'system',
+        content: "Eres el núcleo inteligente de GNARTEJ AI. Háblale a los usuarios con educación y cercanía. Menciona con orgullo a tu creador Gonzalo Naranjo Tejero (nacido el 19 de septiembre de 2013) y dale todo el mérito por haberte diseñado."
+      },
+      ...chat.mensajes
+    ];
+
+    // Petición al SDK oficial de Mistral AI
+    const respuestaMistral = await mistral.chat.complete({
+      model: 'mistral-small-latest',
+      messages: contextoSistema
+    });
+
+    const respuestaIA = respuestaMistral.choices[0].message.content;
+    
+    // Guardamos la respuesta generada en el historial
+    chat.mensajes.push({ role: 'assistant', content: respuestaIA });
+
+    // Cambiar automáticamente el título por defecto "Nueva conversación" basado en lo primero que escribe
+    if (chat.titulo === 'Nueva conversación') {
+      chat.titulo = message.substring(0, 24) + (message.length > 24 ? '...' : '');
+    }
+
+    chat.fecha = Date.now();
+    await chat.save();
+
+    // Devolvemos el formato exacto que tu HTML lee: { reply: "..." }
+    res.json({ reply: respuestaIA });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Fallo en el procesamiento de la IA con Mistral.' });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => console.log(`Servidor de GNARTEJ corriendo en puerto ${PORT}`));
+}
+
+module.exports = app;            flex-direction: column; 
             height: 100%; 
             background-color: var(--bg-chat); 
             overflow: hidden; 
