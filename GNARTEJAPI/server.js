@@ -8,12 +8,11 @@ const app = express();
 
 app.use(express.json());
 
-// --- CONFIGURACIÓN DE CORS SÚPER COMPATIBLE PARA DOS VERCELS ---
-// Esto solucionará el error de la consola permitiendo que tu web hable con tu API
+// Configuración de CORS para tu frontend
 app.use(cors({
     origin: [
-        'https://gnartej-ai.vercel.app', // Tu Vercel del Frontend
-        'http://localhost:5500',          // Por si pruebas en local con Live Server
+        'https://gnartej-ai.vercel.app', 
+        'http://localhost:5500',          
         'http://127.0.0.1:5500'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -21,13 +20,11 @@ app.use(cors({
     credentials: true
 }));
 
-// Responder automáticamente a las peticiones preflight (OPTIONS)
 app.options('*', cors());
 
-// URI de MongoDB Atlas
+// Conexión a MongoDB Atlas
 const MONGO_URL_FIJA = process.env.MONGO_URL_FIJA || "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
 
-// Control de conexión a MongoDB para funciones Serverless
 const conectarBD = async () => {
     if (mongoose.connection.readyState >= 1) return;
     try {
@@ -41,15 +38,10 @@ const conectarBD = async () => {
     }
 };
 
-// Middleware para asegurar que cada petición conecte con la BD
 app.use(async (req, res, next) => {
     await conectarBD();
     next();
 });
-
-// Configuración de Mistral AI
-const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
-const mistral = new Mistral({ apiKey: MISTRAL_API_KEY });
 
 // --- MODELOS DE DATOS ---
 const UserSchema = new mongoose.Schema({
@@ -67,7 +59,7 @@ const ChatSchema = new mongoose.Schema({
 });
 const Chat = mongoose.models.Chat || mongoose.model('Chat', ChatSchema);
 
-// --- RUTAS DEL SERVIDOR ---
+// --- RUTAS ---
 
 app.get('/health', (req, res) => {
     const dbState = mongoose.connection.readyState;
@@ -76,15 +68,13 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.send('API de GNARTEJ activa y respondiendo correctamente en Vercel.');
+    res.send('API de GNARTEJ activa.');
 });
 
-// Ruta de Login para autenticación
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         const usuario = await User.findOne({ username: username.trim() });
-
         if (!usuario || usuario.password !== password.trim()) {
             return res.status(401).json({ error: 'Usuario o clave incorrectos' });
         }
@@ -94,7 +84,6 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
-// Ruta de Registro de usuarios
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -109,7 +98,6 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// Obtener chats del usuario
 app.get('/api/chats/:userId', async (req, res) => {
     try {
         const chats = await Chat.find({ userId: req.params.userId }).sort({ fecha: -1 });
@@ -119,7 +107,6 @@ app.get('/api/chats/:userId', async (req, res) => {
     }
 });
 
-// Iniciar nueva conversación
 app.post('/api/chats/nuevo', async (req, res) => {
     try {
         const { userId } = req.body;
@@ -131,17 +118,16 @@ app.post('/api/chats/nuevo', async (req, res) => {
     }
 });
 
-// Eliminar un chat
 app.delete('/api/chats/:chatId', async (req, res) => {
     try {
         await Chat.findByIdAndDelete(req.params.chatId);
-        res.json({ success: true, message: 'Conversación eliminada con éxito.' });
+        res.json({ success: true, message: 'Conversación eliminada.' });
     } catch (error) {
         res.status(500).json({ error: 'Error al eliminar el chat' });
     }
 });
 
-// Enviar pregunta a Mistral AI
+// Ruta de Mistral optimizada para Serverless
 app.post('/api/chat/preguntar', async (req, res) => {
     try {
         const { chatId, mensajeUsuario } = req.body;
@@ -149,6 +135,15 @@ app.post('/api/chat/preguntar', async (req, res) => {
         if (!chatId || !mensajeUsuario) {
             return res.status(400).json({ error: 'Faltan parámetros requeridos.' });
         }
+
+        // Forzamos la lectura de la API Key aquí dentro para que Vercel no la pierda
+        const apiKeyActual = process.env.MISTRAL_API_KEY;
+        if (!apiKeyActual) {
+            return res.status(500).json({ error: 'La API Key de Mistral sigue sin ser detectada por Vercel.' });
+        }
+
+        // Instanciamos el cliente con la clave fresca de la variable de entorno
+        const mistralCliente = new Mistral({ apiKey: apiKeyActual });
 
         const chat = await Chat.findById(chatId);
         if (!chat) return res.status(404).json({ error: 'Conversación no encontrada.' });
@@ -160,7 +155,7 @@ app.post('/api/chat/preguntar', async (req, res) => {
             ...chat.mensajes
         ];
 
-        const respuestaIA = await mistral.chat.complete({
+        const respuestaIA = await mistralCliente.chat.complete({
             model: 'mistral-large-latest',
             messages: mensajesHistorial,
         });
@@ -187,5 +182,4 @@ app.post('/api/chat/preguntar', async (req, res) => {
     }
 });
 
-// Exportación requerida para Vercel Serverless
 module.exports = app;
