@@ -8,14 +8,20 @@ const app = express();
 
 app.use(express.json());
 
-// Configuración de CORS abierta para evitar bloqueos en entornos Serverless
+// --- CONFIGURACIÓN DE CORS SÚPER COMPATIBLE PARA DOS VERCELS ---
+// Esto solucionará el error de la consola permitiendo que tu web hable con tu API
 app.use(cors({
-    origin: '*',
+    origin: [
+        'https://gnartej-ai.vercel.app', // Tu Vercel del Frontend
+        'http://localhost:5500',          // Por si pruebas en local con Live Server
+        'http://127.0.0.1:5500'
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
     credentials: true
 }));
 
+// Responder automáticamente a las peticiones preflight (OPTIONS)
 app.options('*', cors());
 
 // URI de MongoDB Atlas
@@ -181,12 +187,5 @@ app.post('/api/chat/preguntar', async (req, res) => {
     }
 });
 
-// Módulo de escucha local y exportación requerida para Vercel
-const PORT = process.env.PORT || 3000;
-if (process.env.NODE_ENV !== 'production') {
-    app.listen(PORT, () => {
-        console.log(`Servidor local corriendo en http://localhost:${PORT}`);
-    });
-}
-
+// Exportación requerida para Vercel Serverless
 module.exports = app;
