@@ -8,11 +8,11 @@ const app = express();
 
 app.use(express.json());
 
-// --- CONFIGURACIÓN DE CORS CON TU URL REAL ---
+// Configuración de CORS con tu URL real
 app.use(cors({
     origin: [
-        'https://gnartej-ai-acount.vercel.app', // Tu URL real de la web corregida
-        'https://gnartej-ai.vercel.app',        // Por si acaso dejas la otra activa
+        'https://gnartej-ai-acount.vercel.app', 
+        'https://gnartej-ai.vercel.app',        
         'http://localhost:5500',          
         'http://127.0.0.1:5500'
     ],
@@ -23,8 +23,8 @@ app.use(cors({
 
 app.options('*', cors());
 
-// Conexión a MongoDB Atlas
-const MONGO_URL_FIJA = process.env.MONGO_URL_FIJA || "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
+// Conexión fija a tu base de datos de MongoDB Atlas
+const MONGO_URL_FIJA = "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
 
 const conectarBD = async () => {
     if (mongoose.connection.readyState >= 1) return;
@@ -136,11 +136,11 @@ app.post('/api/chat/preguntar', async (req, res) => {
             return res.status(400).json({ error: 'Faltan parámetros requeridos.' });
         }
 
-        const apiEnv = process.env.MISTRAL_API_KEY;
-        const apiKeyActual = apiEnv ? apiEnv.trim() : null;
+        // PON TU CLAVE DIRECTAMENTE AQUÍ EN LAS COMILLAS:
+        const apiKeyActual = "AQUÍ_PEGA_TU_CLAVE_DE_MISTRAL"; 
 
-        if (!apiKeyActual) {
-            return res.status(500).json({ error: 'La API Key de Mistral no se detecta en Vercel.' });
+        if (apiKeyActual === "AQUÍ_PEGA_TU_CLAVE_DE_MISTRAL" || !apiKeyActual) {
+            return res.status(500).json({ error: 'Por favor, edita la línea 121 de server.js y pon tu clave de Mistral.' });
         }
 
         const mistralCliente = new Mistral({ apiKey: apiKeyActual });
