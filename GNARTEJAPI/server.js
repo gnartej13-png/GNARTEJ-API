@@ -6,20 +6,9 @@ require('dotenv').config();
 
 const app = express();
 
-// --- MIDDLEWARE DE TIMEOUT (30 segundos para evitar bloqueos) ---
-app.use((req, res, next) => {
-    res.setTimeout(30000, () => {
-        console.error(`[TIMEOUT] Request timed out: ${req.method} ${req.path}`);
-        if (!res.headersSent) {
-            res.status(503).json({ error: 'Tiempo de espera agotado' });
-        }
-    });
-    next();
-});
-
 app.use(express.json());
 
-// Configuración abierta de CORS compatible con las restricciones de Vercel
+// Configuración de CORS abierta para evitar bloqueos en entornos Serverless
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -32,32 +21,31 @@ app.options('*', cors());
 // URI de MongoDB Atlas
 const MONGO_URL_FIJA = process.env.MONGO_URL_FIJA || "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
 
-// Middleware esencial para Vercel: asegura que la BD esté conectada en cada petición a la API
-const conectarBDMiddleware = async (req, res, next) => {
-    if (mongoose.connection.readyState >= 1) {
-        return next();
-    }
+// Control de conexión a MongoDB para funciones Serverless
+const conectarBD = async () => {
+    if (mongoose.connection.readyState >= 1) return;
     try {
         await mongoose.connect(MONGO_URL_FIJA, {
-            serverSelectionTimeoutMS: 5000,
+            serverSelectionTimeoutMS: 8000,
             socketTimeoutMS: 45000,
         });
-        console.log('Conectado a MongoDB con éxito en entorno Serverless de Vercel');
-        next();
+        console.log('Conectado a MongoDB Atlas con éxito');
     } catch (err) {
-        console.error('Error crítico al conectar a Mongo en la petición:', err.message);
-        return res.status(500).json({ error: 'Error de conexión con la base de datos', detalle: err.message });
+        console.error('Error al conectar a Mongo:', err.message);
     }
 };
 
-// Aplicamos la conexión automática a todas las rutas de la API
-app.use('/api', conectarBDMiddleware);
+// Middleware para asegurar que cada petición conecte con la BD
+app.use(async (req, res, next) => {
+    await conectarBD();
+    next();
+});
 
 // Configuración de Mistral AI
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const mistral = new Mistral({ apiKey: MISTRAL_API_KEY });
 
-// --- MODELOS DE MONGOOSE ---
+// --- MODELOS DE DATOS ---
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -73,7 +61,7 @@ const ChatSchema = new mongoose.Schema({
 });
 const Chat = mongoose.models.Chat || mongoose.model('Chat', ChatSchema);
 
-// --- RUTAS DE LA API ---
+// --- RUTAS DEL SERVIDOR ---
 
 app.get('/health', (req, res) => {
     const dbState = mongoose.connection.readyState;
@@ -82,31 +70,25 @@ app.get('/health', (req, res) => {
 });
 
 app.get('/', (req, res) => {
-    res.send('API de GNARTEJ activa y respondiendo en Vercel Serverless.');
+    res.send('API de GNARTEJ activa y respondiendo correctamente en Vercel.');
 });
 
-// Ruta de Login corregida (utiliza /api/auth/login)
+// Ruta de Login para autenticación
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        
-        if (!username || !password) {
-            return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
-        }
-
         const usuario = await User.findOne({ username: username.trim() });
 
         if (!usuario || usuario.password !== password.trim()) {
             return res.status(401).json({ error: 'Usuario o clave incorrectos' });
         }
-        res.status(200).json(usuario);
+        res.json(usuario);
     } catch (error) {
-        console.error('Error en el login:', error.message);
         res.status(500).json({ error: 'Error interno en el login' });
     }
 });
 
-// Ruta de Registro corregida
+// Ruta de Registro de usuarios
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -121,6 +103,7 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
+// Obtener chats del usuario
 app.get('/api/chats/:userId', async (req, res) => {
     try {
         const chats = await Chat.find({ userId: req.params.userId }).sort({ fecha: -1 });
@@ -130,6 +113,7 @@ app.get('/api/chats/:userId', async (req, res) => {
     }
 });
 
+// Iniciar nueva conversación
 app.post('/api/chats/nuevo', async (req, res) => {
     try {
         const { userId } = req.body;
@@ -141,15 +125,17 @@ app.post('/api/chats/nuevo', async (req, res) => {
     }
 });
 
+// Eliminar un chat
 app.delete('/api/chats/:chatId', async (req, res) => {
     try {
         await Chat.findByIdAndDelete(req.params.chatId);
-        res.json({ success: true, message: 'Conversación eliminada.' });
+        res.json({ success: true, message: 'Conversación eliminada con éxito.' });
     } catch (error) {
         res.status(500).json({ error: 'Error al eliminar el chat' });
     }
 });
 
+// Enviar pregunta a Mistral AI
 app.post('/api/chat/preguntar', async (req, res) => {
     try {
         const { chatId, mensajeUsuario } = req.body;
@@ -195,5 +181,12 @@ app.post('/api/chat/preguntar', async (req, res) => {
     }
 });
 
-// Exportación obligatoria para que funcione en Vercel Serverless
+// Módulo de escucha local y exportación requerida para Vercel
+const PORT = process.env.PORT || 3000;
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => {
+        console.log(`Servidor local corriendo en http://localhost:${PORT}`);
+    });
+}
+
 module.exports = app;
