@@ -6,10 +6,20 @@ require('dotenv').config();
 
 const app = express();
 
-// Middleware para parsear JSON
+// --- MIDDLEWARE DE TIMEOUT (30 segundos para evitar bloqueos) ---
+app.use((req, res, next) => {
+    res.setTimeout(30000, () => {
+        console.error(`[TIMEOUT] Request timed out: ${req.method} ${req.path}`);
+        if (!res.headersSent) {
+            res.status(503).json({ error: 'Tiempo de espera agotado' });
+        }
+    });
+    next();
+});
+
 app.use(express.json());
 
-// Configuración global de CORS abierta para evitar bloqueos del navegador
+// Configuración abierta de CORS compatible con las restricciones de Vercel
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -19,35 +29,35 @@ app.use(cors({
 
 app.options('*', cors());
 
-// URL de conexión a MongoDB Atlas
+// URI de MongoDB Atlas
 const MONGO_URL_FIJA = process.env.MONGO_URL_FIJA || "mongodb+srv://gnartej:gejbuclo@cluster0.qhlmiq7.mongodb.net/?appName=Cluster0";
 
-// Función de conexión robusta a la Base de Datos
-const conectarBD = async () => {
-    if (mongoose.connection.readyState >= 1) return;
+// Middleware esencial para Vercel: asegura que la BD esté conectada en cada petición a la API
+const conectarBDMiddleware = async (req, res, next) => {
+    if (mongoose.connection.readyState >= 1) {
+        return next();
+    }
     try {
         await mongoose.connect(MONGO_URL_FIJA, {
-            serverSelectionTimeoutMS: 8000,
+            serverSelectionTimeoutMS: 5000,
             socketTimeoutMS: 45000,
         });
-        console.log('Conectado a MongoDB Atlas con éxito');
+        console.log('Conectado a MongoDB con éxito en entorno Serverless de Vercel');
+        next();
     } catch (err) {
-        console.error('Error al conectar a Mongo:', err.message);
+        console.error('Error crítico al conectar a Mongo en la petición:', err.message);
+        return res.status(500).json({ error: 'Error de conexión con la base de datos', detalle: err.message });
     }
 };
 
-// Middleware para asegurar conexión activa en cada petición
-app.use(async (req, res, next) => {
-    await conectarBD();
-    next();
-});
+// Aplicamos la conexión automática a todas las rutas de la API
+app.use('/api', conectarBDMiddleware);
 
-// Inicialización de Mistral AI con la API KEY de las variables de entorno
+// Configuración de Mistral AI
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const mistral = new Mistral({ apiKey: MISTRAL_API_KEY });
 
-// --- MODELOS DE DATOS DE MONGOOSE ---
-
+// --- MODELOS DE MONGOOSE ---
 const UserSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -65,34 +75,38 @@ const Chat = mongoose.models.Chat || mongoose.model('Chat', ChatSchema);
 
 // --- RUTAS DE LA API ---
 
-// Ruta de estado del servicio
 app.get('/health', (req, res) => {
     const dbState = mongoose.connection.readyState;
     const dbStatus = ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown';
     res.status(200).json({ status: 'ok', db: dbStatus });
 });
 
-// Ruta raíz de cortesía
 app.get('/', (req, res) => {
-    res.send('API de GNARTEJ activa y respondiendo en Railway.');
+    res.send('API de GNARTEJ activa y respondiendo en Vercel Serverless.');
 });
 
-// Autenticación de usuario / Login
+// Ruta de Login corregida (utiliza /api/auth/login)
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
+        
+        if (!username || !password) {
+            return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+        }
+
         const usuario = await User.findOne({ username: username.trim() });
 
         if (!usuario || usuario.password !== password.trim()) {
             return res.status(401).json({ error: 'Usuario o clave incorrectos' });
         }
-        res.json(usuario);
+        res.status(200).json(usuario);
     } catch (error) {
+        console.error('Error en el login:', error.message);
         res.status(500).json({ error: 'Error interno en el login' });
     }
 });
 
-// Registro de nuevos usuarios
+// Ruta de Registro corregida
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -107,7 +121,6 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-// Obtener el historial de chats del usuario logueado
 app.get('/api/chats/:userId', async (req, res) => {
     try {
         const chats = await Chat.find({ userId: req.params.userId }).sort({ fecha: -1 });
@@ -117,7 +130,6 @@ app.get('/api/chats/:userId', async (req, res) => {
     }
 });
 
-// Inicializar una nueva conversación vacía
 app.post('/api/chats/nuevo', async (req, res) => {
     try {
         const { userId } = req.body;
@@ -129,17 +141,15 @@ app.post('/api/chats/nuevo', async (req, res) => {
     }
 });
 
-// Eliminar un chat del historial
 app.delete('/api/chats/:chatId', async (req, res) => {
     try {
         await Chat.findByIdAndDelete(req.params.chatId);
-        res.json({ success: true, message: 'Conversación eliminada con éxito.' });
+        res.json({ success: true, message: 'Conversación eliminada.' });
     } catch (error) {
         res.status(500).json({ error: 'Error al eliminar el chat' });
     }
 });
 
-// Interactuar con la Inteligencia Artificial (Mistral AI)
 app.post('/api/chat/preguntar', async (req, res) => {
     try {
         const { chatId, mensajeUsuario } = req.body;
@@ -151,16 +161,13 @@ app.post('/api/chat/preguntar', async (req, res) => {
         const chat = await Chat.findById(chatId);
         if (!chat) return res.status(404).json({ error: 'Conversación no encontrada.' });
 
-        // Guardamos el mensaje que envía el usuario en el historial del chat
         chat.mensajes.push({ role: 'user', content: mensajeUsuario });
 
-        // Estructuramos el prompt del sistema y el contexto para Mistral AI
         const mensajesHistorial = [
             { role: 'system', content: 'Eres GNARTEJ AI, un chatbot asistente avanzado, inteligente, preciso y de confianza.' },
             ...chat.mensajes
         ];
 
-        // Llamada a la API de Mistral
         const respuestaIA = await mistral.chat.complete({
             model: 'mistral-large-latest',
             messages: mensajesHistorial,
@@ -168,11 +175,9 @@ app.post('/api/chat/preguntar', async (req, res) => {
 
         const textoRespuesta = respuestaIA.choices[0].message.content;
 
-        // Guardamos la respuesta generada por la IA en la base de datos
         chat.mensajes.push({ role: 'assistant', content: textoRespuesta });
         chat.fecha = Date.now();
 
-        // Si es el primer mensaje, le ponemos un título dinámico basado en lo que preguntó el usuario
         if (chat.mensajes.length <= 2) {
             chat.titulo = mensajeUsuario.length > 25 ? mensajeUsuario.substring(0, 25) + "..." : mensajeUsuario;
         }
@@ -190,8 +195,5 @@ app.post('/api/chat/preguntar', async (req, res) => {
     }
 });
 
-// Puerto de ejecución del servidor local/nube
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Servidor de GNARTEJ corriendo en el puerto ${PORT}`);
-});
+// Exportación obligatoria para que funcione en Vercel Serverless
+module.exports = app;
