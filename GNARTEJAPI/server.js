@@ -8,10 +8,11 @@ const app = express();
 
 app.use(express.json());
 
-// Configuración de CORS
+// --- CONFIGURACIÓN DE CORS CON TU URL REAL ---
 app.use(cors({
     origin: [
-        'https://gnartej-ai.vercel.app', 
+        'https://gnartej-ai-acount.vercel.app', // Tu URL real de la web corregida
+        'https://gnartej-ai.vercel.app',        // Por si acaso dejas la otra activa
         'http://localhost:5500',          
         'http://127.0.0.1:5500'
     ],
@@ -127,7 +128,6 @@ app.delete('/api/chats/:chatId', async (req, res) => {
     }
 });
 
-// Ruta de Mistral Ultra-Protegida
 app.post('/api/chat/preguntar', async (req, res) => {
     try {
         const { chatId, mensajeUsuario } = req.body;
@@ -136,18 +136,13 @@ app.post('/api/chat/preguntar', async (req, res) => {
             return res.status(400).json({ error: 'Faltan parámetros requeridos.' });
         }
 
-        // Leemos la variable eliminando posibles espacios fantasmas en Vercel
         const apiEnv = process.env.MISTRAL_API_KEY;
         const apiKeyActual = apiEnv ? apiEnv.trim() : null;
 
         if (!apiKeyActual) {
-            return res.status(500).json({ 
-                error: 'La API Key de Mistral sigue sin detectarse.',
-                consejo: 'Asegúrate de haber hecho un Redeploy en Vercel tras guardar la variable.' 
-            });
+            return res.status(500).json({ error: 'La API Key de Mistral no se detecta en Vercel.' });
         }
 
-        // Inicializamos el cliente de Mistral
         const mistralCliente = new Mistral({ apiKey: apiKeyActual });
 
         const chat = await Chat.findById(chatId);
